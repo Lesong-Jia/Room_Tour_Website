@@ -62,9 +62,14 @@ export default function UnityContainer({
           return;
         }
 
+        const resolvedUnityConfig = {
+          ...unityConfig,
+          devicePixelRatio: getUnityDevicePixelRatio(unityConfig.devicePixelRatio)
+        };
+
         const unityInstance = await window.createUnityInstance(
           canvasRef.current,
-          unityConfig,
+          resolvedUnityConfig,
           (progress) => {
             if (!canceled) {
               setLoadingProgress(progress);
@@ -206,4 +211,22 @@ function loadUnityLoader(unityLoaderUrl) {
     script.onerror = () => reject(new Error("Unity loader script failed."));
     document.body.appendChild(script);
   });
+}
+
+function getUnityDevicePixelRatio(defaultValue = 1) {
+  if (typeof window === "undefined") {
+    return defaultValue;
+  }
+
+  const queryValue = new URLSearchParams(window.location.search).get("unityDpr");
+  if (!queryValue) {
+    return defaultValue;
+  }
+
+  const parsedValue = Number(queryValue);
+  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
+    return defaultValue;
+  }
+
+  return Math.min(parsedValue, window.devicePixelRatio || parsedValue);
 }
