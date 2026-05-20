@@ -9,6 +9,7 @@ const DEFAULT_UNITY_CONFIG = {
   frameworkUrl: `${DEFAULT_UNITY_BUILD_PATH}/Welcome_Scene.framework.js.br`,
   codeUrl: `${DEFAULT_UNITY_BUILD_PATH}/Welcome_Scene.wasm.br`,
   streamingAssetsUrl: `${DEFAULT_UNITY_BASE_PATH}/StreamingAssets`,
+  devicePixelRatio: 1,
   companyName: "DefaultCompany",
   productName: "Welcome_Scene",
   productVersion: "0.1"
