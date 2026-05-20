@@ -9,7 +9,6 @@ const DEFAULT_UNITY_CONFIG = {
   frameworkUrl: `${DEFAULT_UNITY_BUILD_PATH}/Welcome_Scene.framework.js.br`,
   codeUrl: `${DEFAULT_UNITY_BUILD_PATH}/Welcome_Scene.wasm.br`,
   streamingAssetsUrl: `${DEFAULT_UNITY_BASE_PATH}/StreamingAssets`,
-  devicePixelRatio: 1,
   companyName: "DefaultCompany",
   productName: "Welcome_Scene",
   productVersion: "0.1"
@@ -62,14 +61,9 @@ export default function UnityContainer({
           return;
         }
 
-        const resolvedUnityConfig = {
-          ...unityConfig,
-          devicePixelRatio: getUnityDevicePixelRatio(unityConfig.devicePixelRatio)
-        };
-
         const unityInstance = await window.createUnityInstance(
           canvasRef.current,
-          resolvedUnityConfig,
+          unityConfig,
           (progress) => {
             if (!canceled) {
               setLoadingProgress(progress);
@@ -211,22 +205,4 @@ function loadUnityLoader(unityLoaderUrl) {
     script.onerror = () => reject(new Error("Unity loader script failed."));
     document.body.appendChild(script);
   });
-}
-
-function getUnityDevicePixelRatio(defaultValue = 1) {
-  if (typeof window === "undefined") {
-    return defaultValue;
-  }
-
-  const queryValue = new URLSearchParams(window.location.search).get("unityDpr");
-  if (!queryValue) {
-    return defaultValue;
-  }
-
-  const parsedValue = Number(queryValue);
-  if (!Number.isFinite(parsedValue) || parsedValue <= 0) {
-    return defaultValue;
-  }
-
-  return Math.min(parsedValue, window.devicePixelRatio || parsedValue);
 }

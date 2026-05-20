@@ -45,7 +45,6 @@ export default function RoomTourPage({ identity, onComplete }) {
       frameworkUrl: `${ROOM_TOUR_UNITY_BUILD_PATH}/${ROOM_TOUR_UNITY_FILE_PREFIX}.framework.js.br`,
       codeUrl: `${ROOM_TOUR_UNITY_BUILD_PATH}/${ROOM_TOUR_UNITY_FILE_PREFIX}.wasm.br`,
       streamingAssetsUrl: `${ROOM_TOUR_UNITY_BASE_PATH}/StreamingAssets`,
-      devicePixelRatio: 1,
       companyName: "DefaultCompany",
       productName: "Room_Tour_User_Lead",
       productVersion: "0.1"

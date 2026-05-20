@@ -170,7 +170,6 @@ export default function TaskPhasePage({
       frameworkUrl: `${unityBasePath}/Build/${unityFilePrefix}.framework.js.br`,
       codeUrl: `${unityBasePath}/Build/${unityFilePrefix}.wasm.br`,
       streamingAssetsUrl: `${unityBasePath}/StreamingAssets`,
-      devicePixelRatio: 1,
       companyName: "DefaultCompany",
       productName: "Task_Phase",
       productVersion: "0.1"
