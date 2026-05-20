@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Practice Calibration Preview</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="experiment-layout">
+        <div class="practice-column">
+          <header class="panel intro-panel">
+            <p class="section-kicker">Practice and device calibration</p>
+            <h1>Welcome to the experiment</h1>
+            <p>
+              Welcome to the experiment. To make sure the experiment runs
+              smoothly, please use a computer with the Chrome browser, and make
+              sure you have a working microphone, headphones, keyboard, and
+              mouse. If the webpage asks for permission to record audio, please
+              allow microphone access.
+            </p>
+            <p>
+              This welcome interaction will help you verify these requirements
+              and establish an initial connection with the robot. When you are
+              ready, let's begin.
+            </p>
+          </header>
+
+          <section class="voice-card" aria-labelledby="voice-recorder-title">
+            <div>
+              <p class="section-kicker">Microphone Check</p>
+              <h2 id="voice-recorder-title">Test your voice input</h2>
+              <p class="voice-copy">
+                Click the button once to start recording, then click it again to
+                stop. After recording, play the sample back to confirm your
+                microphone works.
+              </p>
+            </div>
+
+            <div class="recording-panel">
+              <button class="record-button" type="button" id="recordButton">
+                <span class="record-dot" aria-hidden="true"></span>
+                <span id="recordButtonText">Start voice input</span>
+              </button>
+
+              <div class="recording-status" aria-live="polite">
+                <span id="recordingLabel">Ready</span>
+                <strong id="recordingDuration">00:00</strong>
+              </div>
+            </div>
+
+            <dl class="device-status">
+              <div>
+                <dt>Microphone permission</dt>
+                <dd class="status-pill unknown" id="permissionStatus">
+                  unknown
+                </dd>
+              </div>
+              <div>
+                <dt>Browser recording</dt>
+                <dd class="status-pill idle" id="recorderStatus">idle</dd>
+              </div>
+            </dl>
+
+            <div class="playback-panel" id="playbackPanel" hidden>
+              <span>Playback</span>
+              <audio controls id="audioPlayback">
+                Your browser does not support audio playback.
+              </audio>
+            </div>
+
+            <p class="error-message" id="errorMessage" hidden></p>
+          </section>
+
+          <section
+            class="panel checklist-panel"
+            aria-labelledby="checklist-title"
+          >
+            <div>
+              <p class="section-kicker">Before You Continue</p>
+              <h2 id="checklist-title">Device checklist</h2>
+            </div>
+            <ul class="checklist">
+              <li>
+                <span aria-hidden="true">OK</span>
+                Computer and Chrome browser
+              </li>
+              <li>
+                <span aria-hidden="true">OK</span>
+                Microphone and headphones ready
+              </li>
+              <li>
+                <span aria-hidden="true">OK</span>
+                Keyboard and mouse available
+              </li>
+              <li>
+                <span aria-hidden="true">OK</span>
+                Microphone permission allowed when prompted
+              </li>
+            </ul>
+            <button class="primary-action" type="button">
+              Continue to practice
+            </button>
+          </section>
+        </div>
+
+        <section class="panel robot-panel" aria-labelledby="robot-scene-title">
+          <div class="robot-panel-header">
+            <div>
+              <p class="section-kicker">Welcome Scene</p>
+              <h2 id="robot-scene-title">Meet the robot</h2>
+            </div>
+            <span class="unity-status">Unity placeholder</span>
+          </div>
+
+          <div
+            class="unity-placeholder"
+            role="img"
+            aria-label="Robot welcome scene placeholder"
+          >
+            <div class="room-grid" aria-hidden="true">
+              <div class="robot-avatar">
+                <div class="robot-head">
+                  <span></span>
+                  <span></span>
+                </div>
+                <div class="robot-body"></div>
+              </div>
+              <div class="speech-bubble">
+                Hi, I am ready to practice with you.
+              </div>
+              <div class="room-object desk"></div>
+              <div class="room-object chair"></div>
+            </div>
+          </div>
+
+          <button class="secondary-action" type="button">
+            Play robot greeting
+          </button>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const button = document.getElementById("recordButton");
+      const buttonText = document.getElementById("recordButtonText");
+      const durationEl = document.getElementById("recordingDuration");
+      const labelEl = document.getElementById("recordingLabel");
+      const permissionEl = document.getElementById("permissionStatus");
+      const recorderEl = document.getElementById("recorderStatus");
+      const playbackPanel = document.getElementById("playbackPanel");
+      const audioPlayback = document.getElementById("audioPlayback");
+      const errorEl = document.getElementById("errorMessage");
+
+      const mimeTypes = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+      let mediaRecorder;
+      let stream;
+      let chunks = [];
+      let timer;
+      let startedAt = 0;
+
+      function formatDuration(seconds) {
+        const minutes = Math.floor(seconds / 60).toString().padStart(2, "0");
+        const remainingSeconds = Math.floor(seconds % 60)
+          .toString()
+          .padStart(2, "0");
+        return `${minutes}:${remainingSeconds}`;
+      }
+
+      function setPill(element, state, text = state) {
+        element.className = `status-pill ${state}`;
+        element.textContent = text;
+      }
+
+      function supportedMimeType() {
+        if (!window.MediaRecorder) {
+          return "";
+        }
+        return (
+          mimeTypes.find((mimeType) =>
+            window.MediaRecorder.isTypeSupported(mimeType)
+          ) || ""
+        );
+      }
+
+      async function checkPermission() {
+        if (!navigator.permissions?.query) {
+          return;
+        }
+        try {
+          const permission = await navigator.permissions.query({
+            name: "microphone"
+          });
+          setPill(permissionEl, permission.state);
+          permission.onchange = () => setPill(permissionEl, permission.state);
+        } catch {
+          setPill(permissionEl, "unknown");
+        }
+      }
+
+      async function startRecording() {
+        errorEl.hidden = true;
+        if (!navigator.mediaDevices?.getUserMedia || !window.MediaRecorder) {
+          setPill(recorderEl, "unsupported");
+          errorEl.textContent =
+            "Audio recording is not supported in this browser. Please use Chrome on a computer.";
+          errorEl.hidden = false;
+          return;
+        }
+
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          const mimeType = supportedMimeType();
+          mediaRecorder = new MediaRecorder(
+            stream,
+            mimeType ? { mimeType } : undefined
+          );
+          chunks = [];
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+              chunks.push(event.data);
+            }
+          };
+          mediaRecorder.onstop = () => {
+            const blob = new Blob(chunks, {
+              type: mediaRecorder.mimeType || "audio/webm"
+            });
+            audioPlayback.src = URL.createObjectURL(blob);
+            playbackPanel.hidden = false;
+            setPill(recorderEl, "complete", "recorded");
+            stream.getTracks().forEach((track) => track.stop());
+          };
+
+          startedAt = Date.now();
+          durationEl.textContent = "00:00";
+          labelEl.textContent = "Recording";
+          button.classList.add("recording");
+          button.setAttribute("aria-pressed", "true");
+          buttonText.textContent = "Stop recording";
+          setPill(permissionEl, "granted");
+          setPill(recorderEl, "recording");
+          mediaRecorder.start();
+          timer = window.setInterval(() => {
+            durationEl.textContent = formatDuration(
+              (Date.now() - startedAt) / 1000
+            );
+          }, 250);
+        } catch (error) {
+          const blocked = error.name === "NotAllowedError";
+          setPill(permissionEl, blocked ? "denied" : "unknown");
+          setPill(recorderEl, "idle");
+          errorEl.textContent = blocked
+            ? "Microphone permission was blocked. Please allow microphone access in Chrome and try again."
+            : "The microphone could not be started. Please check your device and try again.";
+          errorEl.hidden = false;
+        }
+      }
+
+      function stopRecording() {
+        if (mediaRecorder?.state === "recording") {
+          window.clearInterval(timer);
+          durationEl.textContent = formatDuration((Date.now() - startedAt) / 1000);
+          labelEl.textContent = "Ready";
+          button.classList.remove("recording");
+          button.setAttribute("aria-pressed", "false");
+          buttonText.textContent = "Start voice input";
+          mediaRecorder.stop();
+        }
+      }
+
+      button.addEventListener("click", () => {
+        if (mediaRecorder?.state === "recording") {
+          stopRecording();
+        } else {
+          startRecording();
+        }
+      });
+
+      checkPermission();
+    </script>
+  </body>
+</html>

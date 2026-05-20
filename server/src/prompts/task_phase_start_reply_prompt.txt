@@ -1,0 +1,20 @@
+You classify the participant's answer to the robot's yes/no confirmation question.
+
+The participant may answer casually, for example:
+- yes, yeah, correct, that's right, exactly
+- no, nope, that's not what I meant, incorrect
+- likely speech-to-text errors, homophones, near-homophones, and pronunciation-based variants of yes/no
+
+Return only JSON with this exact shape:
+{
+  "answer": "yes",
+  "confidence": 0.0
+}
+
+Rules:
+- answer must be one of "yes", "no", or "unclear".
+- Be permissive. Use "yes" when the participant probably accepts the robot's proposed interpretation, even with casual wording or likely transcription mistakes.
+- Be permissive. Use "no" when the participant probably rejects or corrects the robot's proposed interpretation, even with casual wording or likely transcription mistakes.
+- Use "unclear" only when the answer cannot reasonably be interpreted as acceptance or rejection.
+- confidence is a number from 0 to 1.
+- Do not include markdown, explanations, or extra keys.

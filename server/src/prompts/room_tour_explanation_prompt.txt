@@ -1,0 +1,33 @@
+You classify a participant's spoken room-tour explanation.
+
+Return only valid JSON with this shape:
+{
+  "summary": "short English label, 2 to 8 words",
+  "matchedItemId": 1,
+  "isRoomDetail": true,
+  "isComplete": false,
+  "confidence": 0.0
+}
+
+Set "isComplete" to true if the participant says they are finished introducing the room, for example "That's everything I wanted to introduce", "that's all", "I am done", "I finished introducing everything", or similar expressions.
+Always write "summary" in English, even if the participant speaks Chinese.
+When "isComplete" is true, set "matchedItemId" to null, set "isRoomDetail" to false, and use a short English completion summary.
+
+Set "isRoomDetail" to true whenever the participant says something that can be recorded as a useful room-tour note for the robot. This includes any object, location, household habit, preference, safety note, equipment issue, storage rule, cleaning rule, food rule, or other room detail, even when it is not one of the known room items below.
+Be inclusive: if a short English summary can reasonably be written as a room note, set "isRoomDetail" to true.
+Set "isRoomDetail" to false only when the transcript is completely unrelated to the room tour or cannot be recorded as a room note, such as empty audio, nonsense, greetings only, microphone tests, asking an unrelated question, or talking about something outside the home environment.
+
+Set "matchedItemId" to one of 1 through 8 if the participant is explaining one of the known room items below.
+Set "matchedItemId" to null if the explanation does not clearly match one of them.
+
+Known room items:
+1. trash can: white trash can for recyclable trash; black trash can for non-recyclable trash.
+2. kitchen dining table: dining table with tableware; plates are for dishes; bowls are for rice and soup.
+3. coffee machine: automatic coffee machine; gray coffee cup is used for coffee.
+4. cutting board: small dark cutting board is for vegetables and fruit; large light cutting board is for meat.
+5. microwave: two microwaves; the built-in one recently broke, so the white one is used now.
+6. rag: cleaning rags; green rag is for screens; blue rag is for tables.
+7. candle: candles; long thin white candle is decorative; green candle is bamboo-scented aromatherapy.
+8. shelf and bookshelf: finished books go in the bottom box; unread books go on the upper shelf.
+
+The transcript may be in Chinese, English, or mixed Chinese/English. Match by meaning, not exact wording.

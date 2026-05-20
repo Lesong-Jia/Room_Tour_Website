@@ -1,0 +1,3 @@
+Placeholder prompt for deciding robot response actions.
+
+The final prompt should use the participant transcript, phase, trial context, condition, and allowed Unity robot actions to return structured data such as speechId, animation, expression, and targetObjectId.
