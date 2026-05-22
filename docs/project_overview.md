@@ -857,44 +857,50 @@ Current implementation note: the old generic `questionnaire_submissions` and
 `questionnaire_answers` tables were removed after the pre-experiment
 questionnaire was changed to the one-row-per-participant wide table.
 
-## 12. Deployment Options
+## 12. Deployment
 
-Recommended simple deployment path:
+Current recommended deployment path:
 
 ```text
-Vercel
-  - frontend website
-  - Unity WebGL static files, if build size allows
-
-Render
-  - backend API
+Render Web Service
+  - Express backend API
+  - React/Vite frontend from web/dist
+  - Unity WebGL static files from web/public/unity
   - OpenAI calls
   - Supabase writes
 
 Supabase
   - database
-  - file storage
+  - optional storage
+
+GitHub
+  - deployment repository for web/server/supabase/docs
 ```
 
-Alternative AWS path:
+This single-service Render deployment is preferred for the current pilot because
+it avoids cross-origin frontend/backend complexity. The Express server serves
+`/api/...`, the built frontend, and `/unity/...` from one origin. Unity WebGL
+`.br` files are served with explicit Brotli headers.
+
+Current production repository:
 
 ```text
-AWS Amplify
-  - frontend hosting
-  - full-stack app setup
-
-AWS Lambda
-  - backend API functions
-
-Amazon S3
-  - audio files
-  - large Unity WebGL files
-
-DynamoDB or another database
-  - experiment records
+https://github.com/Lesong-Jia/Room_Tour_Website
 ```
 
-The Vercel + Render + Supabase route is likely faster to build and easier to reason about. The AWS Amplify route may be better if the lab already uses AWS or needs everything inside the AWS ecosystem.
+Current production origin:
+
+```text
+https://room-tour-website.onrender.com
+```
+
+The deployable Unity files currently stay below GitHub's 100 MiB hard file
+limit, so Git LFS is not used. Raw Unity source projects and raw WebGL export
+folders are local-only and ignored by the deployment repository.
+
+If participant volume or global loading speed becomes a bottleneck, the next
+deployment improvement would be to move Unity WebGL files to object storage/CDN
+while keeping Express on Render.
 
 ## 13. Development Order
 
@@ -911,7 +917,7 @@ Recommended implementation sequence from this point:
    `task_phase_trial_results`, and `phase_end_questionnaire_submissions`.
 6. Reduce Unity WebGL build size if deployment or loading time becomes a
    bottleneck.
-7. Prepare deployment instructions and run a hosted pilot.
+7. Run a hosted pilot on Render and verify Supabase rows for every phase.
 
 ## 14. Important Architecture Decisions
 

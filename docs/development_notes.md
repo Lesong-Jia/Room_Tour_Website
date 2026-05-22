@@ -7,6 +7,19 @@ This file is for implementation notes that should not crowd the main architectur
 As of 2026-05-19, the initial complete local experiment flow has been
 implemented and pilot-tested end to end.
 
+As of 2026-05-22, the project has also been prepared for hosted deployment:
+
+- GitHub repository: `https://github.com/Lesong-Jia/Room_Tour_Website`.
+- Render Web Service deployment path is configured through root scripts and
+  `render.yaml`.
+- The frontend and backend deploy as one Node service: Express serves both API
+  routes and `web/dist`.
+- `web/public/unity` contains the deployable Unity WebGL builds.
+- `unity/UnityProject` and `unity/WebGLBuild` are local-only and ignored by Git.
+- Git LFS is not currently used because the deployable Unity data files are all
+  below 100 MiB.
+- Render environment variables hold OpenAI and Supabase secrets.
+
 Current full flow:
 
 ```text
@@ -20,6 +33,15 @@ Welcome / audio calibration / Aria greeting
   -> Phase 3 Task Phase using Unity Ex_Stage_2
   -> Phase 3 end questionnaire
   -> Experiment Complete thank-you page
+```
+
+Current deployable Unity data file sizes:
+
+```text
+Welcome_Scene.data.br  97.00 MiB
+Room_Tour.data.br      98.06 MiB
+Ex_Stage_1.data.br     98.43 MiB
+Ex_Stage_2.data.br     98.40 MiB
 ```
 
 Key completed pieces in this milestone:
@@ -1010,6 +1032,10 @@ The tool can:
 - Record the current texture import settings as a restore baseline.
 - Cap selected textures above 512, 1024, 2048, or 4096 down to that size.
 - Cap all textures above 512, 1024, 2048, or 4096 down to that size.
+- Select the largest likely non-critical textures.
+- Select the largest textures overall.
+- Halve texture max size for all textures under selected folders, including
+  subfolders.
 - Restore texture import settings from the saved baseline.
 
 The backup is saved to:
@@ -1022,3 +1048,70 @@ Backup behavior is intentionally conservative: the first recorded settings for
 each texture are kept, and later cap runs do not overwrite them. This means the
 cap tool can be run multiple times while still allowing restore to the original
 recorded baseline.
+
+## Hosted Deployment Notes
+
+Current deployment target:
+
+```text
+Render Web Service
+GitHub repo: https://github.com/Lesong-Jia/Room_Tour_Website
+Production origin: https://room-tour-website.onrender.com
+```
+
+Render should use:
+
+```text
+Build command: npm run build
+Start command: npm start
+```
+
+The production Express server serves:
+
+```text
+/api/...      backend API
+/             React frontend
+/unity/...    Unity WebGL files
+```
+
+`server/src/index.js` sets the required Unity Brotli headers for `.br` files.
+
+Important deployment rules:
+
+- Do not commit `server/.env`.
+- Do not commit `web/dist`; Render rebuilds it.
+- Do not commit `unity/UnityProject` or `unity/WebGLBuild`; copy deployable
+  WebGL exports into `web/public/unity` instead.
+- Before pushing, verify no file under `web/public/unity` exceeds 100 MiB.
+
+Useful check:
+
+```powershell
+Get-ChildItem -Recurse web\public\unity -File |
+  Where-Object { $_.Length -gt 100MB }
+```
+
+## Browser Compatibility Notes
+
+Observed behavior during hosted testing:
+
+- Windows Chrome on a high-performance Windows desktop worked well.
+- macOS Safari worked on the tested MacBook where Chrome had issues.
+- macOS Chrome showed mesh/vertex fragmentation on one MacBook, but another
+  MacBook did not reproduce the issue.
+- A temporary `devicePixelRatio: 1` WebGL setting was tested and then removed:
+  it did not fix the geometry issue and it reduced visual resolution.
+
+Recommended participant browser guidance:
+
+```text
+Windows: Chrome or Edge.
+macOS: Safari.
+```
+
+If macOS Chrome must be debugged, compare Chrome GPU backend settings through:
+
+```text
+chrome://flags
+Choose ANGLE graphics backend
+```

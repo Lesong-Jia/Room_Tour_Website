@@ -1,6 +1,7 @@
 # Human-Robot Communication Experiment
 
-This repository contains the scaffold for a web-based human-robot communication experiment.
+This repository contains the deployment-ready website and backend for a
+web-based human-robot communication experiment.
 
 The current architecture is documented in:
 
@@ -18,7 +19,8 @@ server/
   Backend API for audio upload, OpenAI speech-to-text, robot action decisions, and data logging.
 
 unity/
-  Unity project and WebGL build output for the welcome scene and Room Tour scene.
+  Local Unity source/export area. This folder is ignored in the deployment
+  repository except for lightweight documentation.
 
 docs/
   Project memory, architecture notes, and experiment documentation.
@@ -26,8 +28,9 @@ docs/
 
 ## Current Status
 
-The initial complete local experiment flow is implemented and tested as of
-2026-05-19.
+The initial complete local experiment flow was implemented and tested as of
+2026-05-19. As of 2026-05-22, the project has also been prepared for GitHub and
+Render deployment.
 
 Current working sequence:
 
@@ -72,13 +75,21 @@ Current working pieces:
   Phase 2 and Phase 3 task indices do not overwrite each other.
 - Phase-end questionnaires stored in `phase_end_questionnaire_submissions`.
 - Final completion / thank-you page after Phase 3.
+- GitHub deployment repository:
+  `https://github.com/Lesong-Jia/Room_Tour_Website`.
+- Render single-service deployment path using `npm run build` and `npm start`.
+- Unity WebGL build files copied into `web/public/unity/` and kept below
+  GitHub's 100 MiB file limit.
+- Browser guidance based on testing: Windows participants should use Chrome or
+  Edge; macOS participants should use Safari.
 
 ## Suggested Next Steps
 
-1. Run a final full pilot pass with a fresh browser session and confirm all
+1. Run a hosted full pilot pass with a fresh browser session and confirm all
    Supabase rows are written as expected.
 2. Freeze the task IDs, Unity task configs, and final audio clip assignments for
    data collection.
 3. Add optional full speech-turn/audio-file logging if raw participant audio or
    turn-level transcripts are required by the final study protocol.
-4. Prepare deployment instructions for the final hosting environment.
+4. Monitor Render metrics during pilot sessions and upgrade the instance only if
+   memory, CPU, or response times require it.

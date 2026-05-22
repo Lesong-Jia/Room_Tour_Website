@@ -1,128 +1,272 @@
 # Deployment Guide
 
-This project is ready to deploy as a single Node web service:
+Last updated: 2026-05-22.
+
+The current deployment path is a single Render Web Service:
 
 ```text
-Render web service
+Render Web Service
   - serves the Express API
   - serves the built React/Vite frontend from web/dist
-  - serves Unity WebGL files with the headers Unity needs
+  - serves Unity WebGL files from web/public/unity
+  - calls OpenAI from the backend only
+  - writes experiment data to Supabase
 
 Supabase
-  - stores participants, sessions, questionnaires, room-tour results, and task results
-
-OpenAI
-  - speech transcription and decision prompts through the backend only
+  - participants
+  - sessions
+  - questionnaires
+  - room-tour results
+  - task-phase results
 ```
 
-## Why Not A Simple Static Host
+This is intentionally simpler than splitting frontend and backend across two
+hosts. The production site uses one origin for the webpage, Unity files, and
+API calls.
 
-The Unity WebGL assets are too large for the easiest static hosting path.
+## Current Repository
 
-Current large files include:
+GitHub repository:
 
 ```text
-web/public/unity/Room_Tour/Build/Room_Tour.data       ~443 MB
-web/public/unity/Ex_Stage_1/Build/Ex_Stage_1.data.br  ~372 MB
-web/public/unity/Ex_Stage_2/Build/Ex_Stage_2.data.br  ~372 MB
-web/public/unity/Welcome_Scene/Build/*.data.br        ~266 MB
+https://github.com/Lesong-Jia/Room_Tour_Website
 ```
 
-As of May 2026, Vercel's official limits list static file uploads as 100 MB on
-Hobby and 1 GB on Pro. Cloudflare Pages lists a 25 MiB maximum per site asset.
-So the fastest practical deployment path is a normal Node web service, or a
-separate object-storage/CDN setup for Unity assets.
+The deployment repository includes:
 
-References:
+```text
+web/
+server/
+supabase/migrations/
+docs/
+package.json
+package-lock.json
+render.yaml
+```
 
-- Vercel Limits: https://vercel.com/docs/platform/limits/
-- Cloudflare Pages Limits: https://developers.cloudflare.com/pages/platform/limits/
-- Render Deploys: https://render.com/docs/deploys/
+The repository intentionally excludes:
 
-## Production Runtime
+```text
+server/.env
+node_modules/
+web/dist/
+supabase/.temp/
+unity/UnityProject/
+unity/WebGLBuild/
+```
 
-The production server uses:
+Unity source projects and raw Unity export folders stay local. The deployable
+Unity WebGL builds are copied into:
+
+```text
+web/public/unity/
+```
+
+## Current Unity WebGL Build Sizes
+
+The current deployable Unity data files are below GitHub's 100 MiB hard limit:
+
+```text
+web/public/unity/Welcome_Scene/Build/Welcome_Scene.data.br  97.00 MiB
+web/public/unity/Room_Tour/Build/Room_Tour.data.br          98.06 MiB
+web/public/unity/Ex_Stage_1/Build/Ex_Stage_1.data.br        98.43 MiB
+web/public/unity/Ex_Stage_2/Build/Ex_Stage_2.data.br        98.40 MiB
+```
+
+GitHub may still warn because these files are above the recommended 50 MB
+threshold, but push succeeds as long as no single file exceeds 100 MiB.
+
+Before committing new Unity builds, check:
+
+```powershell
+Get-ChildItem -Recurse web\public\unity -File |
+  Where-Object { $_.Length -gt 100MB } |
+  Select-Object FullName,@{Name="MiB";Expression={[math]::Round($_.Length/1MB,2)}}
+```
+
+If anything appears in that output, reduce the Unity build before pushing.
+
+## Render Settings
+
+Create a Render Web Service connected to:
+
+```text
+Lesong-Jia/Room_Tour_Website
+```
+
+Use:
+
+```text
+Runtime: Node
+Branch: main
+Build command: npm run build
+Start command: npm start
+```
+
+Do not use `npm install; npm run build` as the build command. The root build
+script already installs nested frontend/backend dependencies and builds the
+frontend.
+
+The root scripts are:
 
 ```text
 npm run build
+  -> npm run install:all
+  -> npm --prefix web run build
+
 npm start
+  -> npm --prefix server start
 ```
 
-`npm run build` installs the nested frontend/backend dependencies and builds
-`web/dist`. `npm start` starts the Express server. In production, the frontend
-uses same-origin API calls like `/api/speech/turn`, so no public API URL is
-needed when the frontend and backend are served by the same service.
+## Render Environment Variables
 
-## Required Environment Variables
-
-Set these on the hosting service:
+Set these in Render's Environment panel:
 
 ```text
-OPENAI_API_KEY=
+OPENAI_API_KEY=<secret>
 OPENAI_TRANSCRIPTION_MODEL=gpt-4o-mini-transcribe
 OPENAI_DECISION_MODEL=gpt-5.2
 
-SUPABASE_URL=
-SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_URL=https://vdbrblyfsplbsyggfwjj.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<secret>
 SUPABASE_AUDIO_BUCKET=participant-audio
 
-WEB_ORIGIN=https://your-production-domain.example
+WEB_ORIGIN=https://room-tour-website.onrender.com
+NODE_VERSION=24.14.1
 ```
 
-If frontend and backend use the same production domain, `WEB_ORIGIN` should be
-that domain. For local development, `server/.env.example` keeps the localhost
-values.
+Do not commit real OpenAI or Supabase service-role keys. The local
+`server/.env` file is ignored by Git.
 
-Never put `OPENAI_API_KEY` or `SUPABASE_SERVICE_ROLE_KEY` in `web/` files.
+## Production Runtime Behavior
 
-## Render Steps
-
-1. Put this project in a Git repository.
-2. Because the Unity files are larger than GitHub's normal 100 MiB file limit,
-   install Git LFS before committing the Unity builds:
+The Express server handles both API routes and static files:
 
 ```text
-git lfs install
-git add .gitattributes
-git add web/public/unity unity/WebGLBuild
+/api/...      backend API
+/             React/Vite frontend
+/unity/...    Unity WebGL files
 ```
 
-   The added `.gitattributes` file marks Unity build data and WebAssembly files
-   for LFS. If the hosting provider does not fetch LFS objects during deploy,
-   use object storage/CDN for `web/public/unity` instead.
-
-3. Push the repository.
-4. In Render, create a Blueprint from `render.yaml` or create a Web Service manually.
-5. Use:
+The production server also sets Unity Brotli headers for `.br` files:
 
 ```text
-Build command: npm run build
-Start command: npm start
-Node version: 24.14.1 or newer
+Content-Encoding: br
+.wasm.br      -> application/wasm
+.js.br        -> application/javascript
+.data.br      -> application/octet-stream
 ```
 
-6. Add the required environment variables.
-7. Deploy.
-8. Open `/health` first. It should return:
+After deploy, first test:
+
+```text
+https://room-tour-website.onrender.com/health
+```
+
+Expected response:
 
 ```json
 { "ok": true }
 ```
 
-9. Open the root URL and run a fresh pilot participant pass.
+Then run a complete pilot pass from the root URL.
+
+## Updating Unity Builds
+
+When a new Unity WebGL build is exported locally:
+
+```text
+unity/WebGLBuild/Welcome_Scene
+unity/WebGLBuild/Room_Tour
+unity/WebGLBuild/Ex_Stage_1
+unity/WebGLBuild/Ex_Stage_2
+```
+
+Copy only the relevant build into:
+
+```text
+web/public/unity/<BuildName>
+```
+
+Then run:
+
+```powershell
+npm --prefix web run build
+```
+
+Check that no deployable file exceeds 100 MiB, then commit and push:
+
+```powershell
+git add web/public/unity/<BuildName>
+git commit -m "Update <BuildName> WebGL build"
+git push
+```
+
+Render should redeploy automatically after the push.
+
+## Browser Guidance
+
+Current observed compatibility:
+
+```text
+Windows Chrome / Edge
+  Works well on the tested Windows machine.
+
+macOS Safari
+  Works on the tested Mac where Chrome showed geometry artifacts.
+
+macOS Chrome
+  Risky on at least one MacBook: some meshes showed vertex/triangle explosion.
+  Another MacBook did not show the issue, so this appears device/GPU/backend
+  dependent rather than a universal macOS problem.
+```
+
+Recommended participant instructions:
+
+```text
+Windows participants should use Chrome or Edge.
+macOS participants should use Safari.
+```
+
+If Mac Chrome must be debugged, test Chrome's ANGLE graphics backend:
+
+```text
+chrome://flags
+Choose ANGLE graphics backend -> OpenGL / Metal / Default
+```
+
+## Render Plan Choice
+
+Do not use Render Free for participant-facing sessions. Free instances can spin
+down after inactivity, which creates long cold starts. For small pilot usage
+with fewer than about 20 concurrent participants, the lowest paid Web Service
+instance is expected to be sufficient because Unity runs in the participant's
+browser. Render mainly serves static files, receives audio uploads, calls
+OpenAI, and writes Supabase rows.
+
+Monitor Render metrics during pilot runs:
+
+```text
+memory usage
+CPU
+response time
+service restarts
+```
+
+Upgrade only if memory approaches the instance limit or the service restarts.
 
 ## Supabase Checklist
 
-Before the hosted pilot, confirm the Supabase project has the migrations in:
+Before hosted testing, confirm the remote Supabase database has the migrations:
 
 ```text
 supabase/migrations/
 ```
 
-If the remote database is not up to date, run:
+If needed:
 
-```text
-npx supabase link --project-ref <project-ref>
+```powershell
+npx supabase link --project-ref vdbrblyfsplbsyggfwjj
 npx supabase db push
 ```
 
@@ -143,7 +287,7 @@ Phase 3 end questionnaire
 Completion page
 ```
 
-Then verify Supabase rows were written to:
+Verify rows are written to:
 
 ```text
 participants
@@ -157,7 +301,12 @@ phase_end_questionnaire_submissions
 
 ## Future Optimization
 
-The current Unity files are deployable on a normal Node service, but they are
-large enough to make first-page loading slow. Before formal data collection,
-consider reducing Unity build size or moving Unity assets to object storage/CDN
-with explicit `Content-Encoding: br` headers for `.br` files.
+The current build is deployable without Git LFS, but the Unity files are close
+to the 100 MiB limit. Future optimizations may include:
+
+```text
+reduce Unity lightmap resolution where possible
+cap non-critical decorative textures
+remove unused Unity assets from active scenes
+move Unity files to object storage/CDN if the experiment scales
+```
