@@ -2,9 +2,12 @@ import { useEffect, useRef, useState } from "react";
 import { uploadSpeechTurn } from "../experiment/api.js";
 
 const RECORDING_MIME_TYPES = [
+  "audio/mp4;codecs=mp4a.40.2",
+  "audio/mp4",
+  "audio/aac",
   "audio/webm;codecs=opus",
   "audio/webm",
-  "audio/mp4"
+  "audio/ogg;codecs=opus"
 ];
 
 function getSupportedMimeType() {
@@ -112,14 +115,10 @@ export default function VoiceRecorder({
       return;
     }
 
+    let stream;
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: selectedDeviceId
-          ? {
-              deviceId: { exact: selectedDeviceId }
-            }
-          : true
-      });
+      stream = await getMicrophoneStream();
       refreshAudioInputs();
       const mimeType = getSupportedMimeType();
       const mediaRecorder = new MediaRecorder(
@@ -139,28 +138,80 @@ export default function VoiceRecorder({
       };
 
       mediaRecorder.onstop = () => {
-        const audioBlob = new Blob(chunksRef.current, {
-          type: mediaRecorder.mimeType || "audio/webm"
+        const recordedChunks = chunksRef.current;
+        const recordedMimeType = mediaRecorder.mimeType || mimeType;
+
+        mediaRecorderRef.current = null;
+        chunksRef.current = [];
+        const audioBlob = new Blob(recordedChunks, {
+          type: recordedMimeType || "audio/webm"
         });
-        setRecorderState("sending");
         stream.getTracks().forEach((track) => track.stop());
         streamRef.current = null;
         stopVolumeMeter();
-        sendAudioTurn(audioBlob, mediaRecorder.mimeType);
+
+        if (recordedChunks.length === 0 || audioBlob.size === 0) {
+          setRecorderState("idle");
+          setStatusMessage("");
+          setErrorMessage(
+            "No audio was recorded. Please check the microphone permission and try again."
+          );
+          return;
+        }
+
+        setRecorderState("sending");
+        sendAudioTurn(audioBlob, recordedMimeType);
+      };
+
+      mediaRecorder.onerror = () => {
+        mediaRecorderRef.current = null;
+        chunksRef.current = [];
+        stream.getTracks().forEach((track) => track.stop());
+        streamRef.current = null;
+        stopVolumeMeter();
+        setRecorderState("idle");
+        setStatusMessage("");
+        setErrorMessage(
+          "The microphone recording stopped unexpectedly. Please try again."
+        );
       };
 
       setPermissionState("granted");
       setRecorderState("recording");
-      mediaRecorder.start();
+      mediaRecorder.start(1000);
     } catch (error) {
+      stream?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      mediaRecorderRef.current = null;
+      chunksRef.current = [];
       setRecorderState("idle");
       stopVolumeMeter();
       setPermissionState(error.name === "NotAllowedError" ? "denied" : "unknown");
       setErrorMessage(
         error.name === "NotAllowedError"
-          ? "Microphone permission was blocked. Please allow microphone access in Chrome and try again."
+          ? "Microphone permission was blocked. Please allow microphone access and try again."
           : "The microphone could not be started. Please check your device and try again."
       );
+    }
+  }
+
+  async function getMicrophoneStream() {
+    if (!selectedDeviceId) {
+      return navigator.mediaDevices.getUserMedia({ audio: true });
+    }
+
+    try {
+      return await navigator.mediaDevices.getUserMedia({
+        audio: {
+          deviceId: { exact: selectedDeviceId }
+        }
+      });
+    } catch (error) {
+      if (error.name !== "OverconstrainedError") {
+        throw error;
+      }
+
+      return navigator.mediaDevices.getUserMedia({ audio: true });
     }
   }
 
