@@ -11,7 +11,9 @@ const DEFAULT_UNITY_CONFIG = {
   streamingAssetsUrl: `${DEFAULT_UNITY_BASE_PATH}/StreamingAssets`,
   companyName: "DefaultCompany",
   productName: "Welcome_Scene",
-  productVersion: "0.1"
+  productVersion: "0.1",
+  cacheControl: () => "no-store",
+  devicePixelRatio: getUnityDevicePixelRatio()
 };
 
 export default function UnityContainer({
@@ -63,7 +65,7 @@ export default function UnityContainer({
 
         const unityInstance = await window.createUnityInstance(
           canvasRef.current,
-          unityConfig,
+          withSafariUnityDefaults(unityConfig),
           (progress) => {
             if (!canceled) {
               setLoadingProgress(progress);
@@ -183,7 +185,10 @@ function isEditableElement(target) {
 }
 
 function loadUnityLoader(unityLoaderUrl) {
-  if (window.createUnityInstance) {
+  if (
+    window.createUnityInstance &&
+    window.__experimentUnityLoaderUrl === unityLoaderUrl
+  ) {
     return Promise.resolve();
   }
 
@@ -192,8 +197,22 @@ function loadUnityLoader(unityLoaderUrl) {
       `script[src="${unityLoaderUrl}"]`
     );
 
+    if (existingScript?.dataset.loaded === "true") {
+      window.__experimentUnityLoaderUrl = unityLoaderUrl;
+      resolve();
+      return;
+    }
+
     if (existingScript) {
-      existingScript.addEventListener("load", resolve, { once: true });
+      existingScript.addEventListener(
+        "load",
+        () => {
+          existingScript.dataset.loaded = "true";
+          window.__experimentUnityLoaderUrl = unityLoaderUrl;
+          resolve();
+        },
+        { once: true }
+      );
       existingScript.addEventListener("error", reject, { once: true });
       return;
     }
@@ -201,8 +220,38 @@ function loadUnityLoader(unityLoaderUrl) {
     const script = document.createElement("script");
     script.src = unityLoaderUrl;
     script.async = true;
-    script.onload = resolve;
+    script.onload = () => {
+      script.dataset.loaded = "true";
+      window.__experimentUnityLoaderUrl = unityLoaderUrl;
+      resolve();
+    };
     script.onerror = () => reject(new Error("Unity loader script failed."));
     document.body.appendChild(script);
   });
+}
+
+function withSafariUnityDefaults(unityConfig) {
+  return {
+    cacheControl: () => "no-store",
+    devicePixelRatio: getUnityDevicePixelRatio(),
+    ...unityConfig
+  };
+}
+
+function getUnityDevicePixelRatio() {
+  if (typeof window === "undefined") {
+    return 1;
+  }
+
+  return isSafariBrowser() ? 1 : window.devicePixelRatio || 1;
+}
+
+function isSafariBrowser() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  return /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(
+    navigator.userAgent
+  );
 }
