@@ -596,8 +596,18 @@ function getTaskOverlay({
         </p>
         <div className="task-phase-likert-list">
           {LIKERT_ITEMS.map((item) => (
-            <fieldset className="task-phase-likert-item" key={item.id}>
-              <legend>{item.label}</legend>
+            <div
+              aria-labelledby={`task-phase-likert-${item.id}`}
+              className="task-phase-likert-item"
+              key={item.id}
+              role="radiogroup"
+            >
+              <p
+                className="task-phase-likert-question"
+                id={`task-phase-likert-${item.id}`}
+              >
+                {item.label}
+              </p>
               <div className="task-phase-likert-options">
                 {[1, 2, 3, 4, 5].map((value) => (
                   <label key={value}>
@@ -617,7 +627,7 @@ function getTaskOverlay({
                   </label>
                 ))}
               </div>
-            </fieldset>
+            </div>
           ))}
         </div>
         {ratingError ? <p className="error-message">{ratingError}</p> : null}
