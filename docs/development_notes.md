@@ -1115,7 +1115,8 @@ Get-ChildItem -Recurse web\public\unity -File |
 Observed behavior during hosted testing:
 
 - Windows Chrome on a high-performance Windows desktop worked well.
-- macOS Safari worked on the tested MacBook where Chrome had issues.
+- macOS Safari loaded Unity after Safari-specific cache workarounds, but
+  random-task audio could stutter.
 - macOS Chrome showed mesh/vertex fragmentation on one MacBook, but another
   MacBook did not reproduce the issue.
 - A temporary `devicePixelRatio: 1` WebGL setting was tested and then removed:
@@ -1124,8 +1125,8 @@ Observed behavior during hosted testing:
 Recommended participant browser guidance:
 
 ```text
-Windows: Chrome or Edge.
-macOS: Safari.
+Use a Windows desktop computer with Chrome.
+Do not recommend macOS Safari/Chrome for formal participant collection.
 ```
 
 If macOS Chrome must be debugged, compare Chrome GPU backend settings through:

@@ -256,11 +256,12 @@ Render should redeploy automatically after the push.
 Current observed compatibility:
 
 ```text
-Windows Chrome / Edge
+Windows desktop Chrome
   Works well on the tested Windows machine.
 
 macOS Safari
-  Works on the tested Mac where Chrome showed geometry artifacts.
+  Unity loads after Safari-specific cache workarounds, but random-task audio can
+  stutter. Not recommended for formal participant collection.
 
 macOS Chrome
   Risky on at least one MacBook: some meshes showed vertex/triangle explosion.
@@ -271,8 +272,8 @@ macOS Chrome
 Recommended participant instructions:
 
 ```text
-Windows participants should use Chrome or Edge.
-macOS participants should use Safari.
+Participants should use a Windows desktop computer with Chrome.
+macOS Safari/Chrome are not recommended for formal participant collection.
 ```
 
 If Mac Chrome must be debugged, test Chrome's ANGLE graphics backend:

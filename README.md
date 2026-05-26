@@ -98,8 +98,8 @@ Current working pieces:
 - Unity WebGL build files copied into `web/public/unity/` and kept below
   GitHub's 100 MiB file limit.
 - First-page participant requirements include native/fluent English and device
-  setup guidance. Chrome is recommended; if a 3D model displays incorrectly,
-  participants are told to try another browser.
+  setup guidance. Participants are asked to use a Windows desktop computer with
+  Chrome, a working microphone, headphones, keyboard, and mouse.
 
 ## Suggested Next Steps
 

@@ -55,8 +55,9 @@ experiment_notice
 The current deployment is configured for CloudResearch data collection.
 
 - The first welcome notice requires participants to be native or fluent English
-  speakers, asks them to use a working microphone/headphones/keyboard/mouse, and
-  warns that attention checks may affect bonus eligibility.
+  speakers, asks them to use a Windows desktop computer with Chrome, a working
+  microphone/headphones/keyboard/mouse, and warns that attention checks may
+  affect bonus eligibility.
 - The final page displays the CloudResearch completion code `4CAD4C4248`.
 - Environment Introduction uses a 5-minute memory timer.
 - Participant/session identity is stored in browser localStorage and verified

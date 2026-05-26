@@ -20,15 +20,15 @@ export default function ExperimentNoticePage({ onContinue }) {
           <section>
             <h2>Device and Display Setup</h2>
             <p>
-              Please make sure you have a working microphone, headphones,
-              keyboard, and mouse. If the webpage asks for permission to record
-              audio, please allow microphone access.
+              Please use a Windows desktop computer for this experiment. Make
+              sure you have a working microphone, headphones, keyboard, and
+              mouse. If the webpage asks for permission to record audio, please
+              allow microphone access.
             </p>
             <p>
               For the best experience, a computer with strong performance and a
               2K or higher-resolution monitor is recommended. The Chrome browser
-              is recommended. If the 3D model does not display correctly, please
-              try switching to another browser.
+              is recommended.
             </p>
           </section>
           <section>
