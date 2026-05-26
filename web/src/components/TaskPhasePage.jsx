@@ -475,7 +475,8 @@ export default function TaskPhasePage({
     ratings,
     ratingError,
     setRatings,
-    submitTaskQuestionnaire
+    submitTaskQuestionnaire,
+    useSafariQuestionnaireLayout: isSafariBrowser()
   });
 
   return (
@@ -550,7 +551,8 @@ function getTaskOverlay({
   ratings,
   ratingError,
   setRatings,
-  submitTaskQuestionnaire
+  submitTaskQuestionnaire,
+  useSafariQuestionnaireLayout
 }) {
   if (taskPhase === "instruction") {
     return (
@@ -596,38 +598,13 @@ function getTaskOverlay({
         </p>
         <div className="task-phase-likert-list">
           {LIKERT_ITEMS.map((item) => (
-            <div
-              aria-labelledby={`task-phase-likert-${item.id}`}
-              className="task-phase-likert-item"
+            <TaskPhaseLikertItem
+              item={item}
               key={item.id}
-              role="radiogroup"
-            >
-              <p
-                className="task-phase-likert-question"
-                id={`task-phase-likert-${item.id}`}
-              >
-                {item.label}
-              </p>
-              <div className="task-phase-likert-options">
-                {[1, 2, 3, 4, 5].map((value) => (
-                  <label key={value}>
-                    <input
-                      type="radio"
-                      name={item.id}
-                      value={value}
-                      checked={ratings[item.id] === String(value)}
-                      onChange={(event) =>
-                        setRatings((currentRatings) => ({
-                          ...currentRatings,
-                          [item.id]: event.target.value
-                        }))
-                      }
-                    />
-                    <span>{value}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
+              ratings={ratings}
+              setRatings={setRatings}
+              useSafariQuestionnaireLayout={useSafariQuestionnaireLayout}
+            />
           ))}
         </div>
         {ratingError ? <p className="error-message">{ratingError}</p> : null}
@@ -639,6 +616,60 @@ function getTaskOverlay({
   }
 
   return null;
+}
+
+function TaskPhaseLikertItem({
+  item,
+  ratings,
+  setRatings,
+  useSafariQuestionnaireLayout
+}) {
+  const options = (
+    <div className="task-phase-likert-options">
+      {[1, 2, 3, 4, 5].map((value) => (
+        <label key={value}>
+          <input
+            type="radio"
+            name={item.id}
+            value={value}
+            checked={ratings[item.id] === String(value)}
+            onChange={(event) =>
+              setRatings((currentRatings) => ({
+                ...currentRatings,
+                [item.id]: event.target.value
+              }))
+            }
+          />
+          <span>{value}</span>
+        </label>
+      ))}
+    </div>
+  );
+
+  if (useSafariQuestionnaireLayout) {
+    return (
+      <div
+        aria-labelledby={`task-phase-likert-${item.id}`}
+        className="task-phase-likert-item"
+        role="radiogroup"
+      >
+        <p
+          className="task-phase-likert-question"
+          id={`task-phase-likert-${item.id}`}
+        >
+          {item.label}
+        </p>
+        {options}
+      </div>
+    );
+  }
+
+  return (
+    <fieldset className="task-phase-likert-item">
+      <legend>{item.label}</legend>
+      {options}
+    </fieldset>
+  );
 }
 
 function getVoiceFlowStep(taskPhase) {
@@ -757,6 +788,16 @@ function writeStoredClarifications(sessionId, clarifiedTasks) {
 
 function getClarificationsStorageKey(sessionId) {
   return `humanRobotExperiment.fixedClarifications:${sessionId}`;
+}
+
+function isSafariBrowser() {
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  return /^((?!chrome|android|crios|fxios|edg).)*safari/i.test(
+    navigator.userAgent
+  );
 }
 
 function toTaskState(detail) {
