@@ -121,6 +121,7 @@ export default function PhaseController({ identity, onContinue }) {
       ) : (
         <UnityContainer
           sceneStarted={sceneStarted}
+          deferSafariLoadUntilStarted
           completionOverlay={completionOverlay}
         >
           {shouldShowVoiceRecorder ? (

@@ -17,6 +17,7 @@ const DEFAULT_UNITY_CONFIG = {
 export default function UnityContainer({
   children,
   sceneStarted,
+  deferSafariLoadUntilStarted = false,
   completionOverlay,
   sceneOverlay,
   preStartOverlay,
@@ -27,9 +28,15 @@ export default function UnityContainer({
 }) {
   const canvasRef = useRef(null);
   const unityInstanceRef = useRef(null);
+  const useSafariWorkarounds = isSafariBrowser();
+  const effectiveUnityLoaderUrl = useSafariWorkarounds
+    ? appendCacheBuster(unityLoaderUrl)
+    : unityLoaderUrl;
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadState, setLoadState] = useState("loading");
   const [errorMessage, setErrorMessage] = useState("");
+  const shouldLoadUnity =
+    !deferSafariLoadUntilStarted || !useSafariWorkarounds || sceneStarted;
 
   useEffect(() => {
     function stopUnityKeyboardCapture(event) {
@@ -53,9 +60,15 @@ export default function UnityContainer({
     let canceled = false;
 
     async function loadUnity() {
+      if (!shouldLoadUnity) {
+        setLoadState("waiting");
+        setLoadingProgress(0);
+        return;
+      }
+
       try {
         setLoadState("loading");
-        await loadUnityLoader(unityLoaderUrl);
+        await loadUnityLoader(effectiveUnityLoaderUrl);
 
         if (canceled || !canvasRef.current) {
           return;
@@ -63,7 +76,7 @@ export default function UnityContainer({
 
         const unityInstance = await window.createUnityInstance(
           canvasRef.current,
-          withSafariUnityDefaults(unityConfig),
+          withSafariUnityDefaults(unityConfig, useSafariWorkarounds),
           (progress) => {
             if (!canceled) {
               setLoadingProgress(progress);
@@ -99,7 +112,13 @@ export default function UnityContainer({
       }
       unityInstanceRef.current?.Quit?.();
     };
-  }, [onReady, unityConfig, unityLoaderUrl]);
+  }, [
+    effectiveUnityLoaderUrl,
+    onReady,
+    shouldLoadUnity,
+    unityConfig,
+    useSafariWorkarounds
+  ]);
 
   useEffect(() => {
     if (sceneStarted && loadState === "ready") {
@@ -228,16 +247,28 @@ function loadUnityLoader(unityLoaderUrl) {
   });
 }
 
-function withSafariUnityDefaults(unityConfig) {
-  if (!isSafariBrowser()) {
+function withSafariUnityDefaults(unityConfig, useSafariWorkarounds) {
+  if (!useSafariWorkarounds) {
     return unityConfig;
   }
 
   return {
     ...unityConfig,
+    dataUrl: appendCacheBuster(unityConfig.dataUrl),
+    frameworkUrl: appendCacheBuster(unityConfig.frameworkUrl),
+    codeUrl: appendCacheBuster(unityConfig.codeUrl),
     cacheControl: () => "no-store",
     devicePixelRatio: 1
   };
+}
+
+function appendCacheBuster(url) {
+  if (!url) {
+    return url;
+  }
+
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}safariUnityFix=20260526`;
 }
 
 function isSafariBrowser() {

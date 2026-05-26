@@ -76,6 +76,7 @@ function setUnityStaticHeaders(response, filePath) {
   if (filePath.endsWith(".br")) {
     response.setHeader("Content-Encoding", "br");
     response.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    addVaryHeader(response, "Accept-Encoding");
   }
 
   if (filePath.endsWith(".wasm.br") || extname(filePath) === ".wasm") {
@@ -91,4 +92,21 @@ function setUnityStaticHeaders(response, filePath) {
   if (filePath.endsWith(".data.br") || extname(filePath) === ".data") {
     response.setHeader("Content-Type", "application/octet-stream");
   }
+}
+
+function addVaryHeader(response, value) {
+  const currentHeader = response.getHeader("Vary");
+  const currentValues = Array.isArray(currentHeader)
+    ? currentHeader.join(",")
+    : currentHeader || "";
+  const values = currentValues
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (!values.some((item) => item.toLowerCase() === value.toLowerCase())) {
+    values.push(value);
+  }
+
+  response.setHeader("Vary", values.join(", "));
 }
