@@ -11,9 +11,7 @@ const DEFAULT_UNITY_CONFIG = {
   streamingAssetsUrl: `${DEFAULT_UNITY_BASE_PATH}/StreamingAssets`,
   companyName: "DefaultCompany",
   productName: "Welcome_Scene",
-  productVersion: "0.1",
-  cacheControl: () => "no-store",
-  devicePixelRatio: getUnityDevicePixelRatio()
+  productVersion: "0.1"
 };
 
 export default function UnityContainer({
@@ -231,19 +229,15 @@ function loadUnityLoader(unityLoaderUrl) {
 }
 
 function withSafariUnityDefaults(unityConfig) {
-  return {
-    cacheControl: () => "no-store",
-    devicePixelRatio: getUnityDevicePixelRatio(),
-    ...unityConfig
-  };
-}
-
-function getUnityDevicePixelRatio() {
-  if (typeof window === "undefined") {
-    return 1;
+  if (!isSafariBrowser()) {
+    return unityConfig;
   }
 
-  return isSafariBrowser() ? 1 : window.devicePixelRatio || 1;
+  return {
+    ...unityConfig,
+    cacheControl: () => "no-store",
+    devicePixelRatio: 1
+  };
 }
 
 function isSafariBrowser() {
