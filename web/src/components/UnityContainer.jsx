@@ -257,8 +257,7 @@ function withSafariUnityDefaults(unityConfig, useSafariWorkarounds) {
     dataUrl: appendCacheBuster(unityConfig.dataUrl),
     frameworkUrl: appendCacheBuster(unityConfig.frameworkUrl),
     codeUrl: appendCacheBuster(unityConfig.codeUrl),
-    cacheControl: () => "no-store",
-    devicePixelRatio: 1
+    cacheControl: () => "no-store"
   };
 }
 
