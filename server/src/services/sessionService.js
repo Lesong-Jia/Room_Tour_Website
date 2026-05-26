@@ -5,19 +5,22 @@ const DEFAULT_FLOW_STEP = "pre_experiment_questionnaire";
 
 export async function startExperimentSession({
   currentFlowStep = DEFAULT_FLOW_STEP,
-  conditionId = null,
   userAgent = ""
 } = {}) {
   const supabase = getSupabaseClient();
+  const assignedCondition = await assignExperimentConditions(supabase);
   const participantCode = createParticipantCode();
 
   const { data: participant, error: participantError } = await supabase
     .from("participants")
     .insert({
       participant_code: participantCode,
-      condition_id: conditionId
+      condition_id: assignedCondition.conditionId,
+      condition_assignment_index: assignedCondition.assignmentIndex,
+      room_tour_condition: assignedCondition.roomTourCondition,
+      task_response_condition: assignedCondition.taskResponseCondition
     })
-    .select("id, participant_code, condition_id, created_at")
+    .select("id, participant_code, condition_id, condition_assignment_index, room_tour_condition, task_response_condition, created_at")
     .single();
 
   if (participantError) {
@@ -30,9 +33,12 @@ export async function startExperimentSession({
       participant_id: participant.id,
       current_flow_step: currentFlowStep,
       status: "in_progress",
+      condition_assignment_index: assignedCondition.assignmentIndex,
+      room_tour_condition: assignedCondition.roomTourCondition,
+      task_response_condition: assignedCondition.taskResponseCondition,
       user_agent: userAgent
     })
-    .select("id, current_flow_step, status, started_at, last_seen_at")
+    .select("id, current_flow_step, status, condition_assignment_index, room_tour_condition, task_response_condition, started_at, last_seen_at")
     .single();
 
   if (sessionError) {
@@ -58,7 +64,7 @@ export async function resumeExperimentSession({ participantId, sessionId }) {
     })
     .eq("id", sessionId)
     .eq("participant_id", participantId)
-    .select("id, participant_id, current_flow_step, status, started_at, last_seen_at")
+    .select("id, participant_id, current_flow_step, status, condition_assignment_index, room_tour_condition, task_response_condition, started_at, last_seen_at")
     .single();
 
   if (sessionError) {
@@ -67,12 +73,59 @@ export async function resumeExperimentSession({ participantId, sessionId }) {
 
   const { data: participant, error: participantError } = await supabase
     .from("participants")
-    .select("id, participant_code, condition_id, created_at")
+    .select("id, participant_code, condition_id, condition_assignment_index, room_tour_condition, task_response_condition, created_at")
     .eq("id", session.participant_id)
     .single();
 
   if (participantError) {
     throw toServiceError(participantError, "Could not load participant.");
+  }
+
+  if (
+    !participant.room_tour_condition ||
+    !participant.task_response_condition ||
+    !session.room_tour_condition ||
+    !session.task_response_condition
+  ) {
+    const assignedCondition = await assignExperimentConditions(supabase);
+
+    const { data: updatedParticipant, error: participantUpdateError } = await supabase
+      .from("participants")
+      .update({
+        condition_id: assignedCondition.conditionId,
+        condition_assignment_index: assignedCondition.assignmentIndex,
+        room_tour_condition: assignedCondition.roomTourCondition,
+        task_response_condition: assignedCondition.taskResponseCondition
+      })
+      .eq("id", participant.id)
+      .select("id, participant_code, condition_id, condition_assignment_index, room_tour_condition, task_response_condition, created_at")
+      .single();
+
+    if (participantUpdateError) {
+      throw toServiceError(participantUpdateError, "Could not update participant condition.");
+    }
+
+    const { data: updatedSession, error: sessionUpdateError } = await supabase
+      .from("experiment_sessions")
+      .update({
+        condition_assignment_index: assignedCondition.assignmentIndex,
+        room_tour_condition: assignedCondition.roomTourCondition,
+        task_response_condition: assignedCondition.taskResponseCondition,
+        last_seen_at: new Date().toISOString()
+      })
+      .eq("id", sessionId)
+      .eq("participant_id", participantId)
+      .select("id, participant_id, current_flow_step, status, condition_assignment_index, room_tour_condition, task_response_condition, started_at, last_seen_at")
+      .single();
+
+    if (sessionUpdateError) {
+      throw toServiceError(sessionUpdateError, "Could not update session condition.");
+    }
+
+    return formatIdentity({
+      participant: updatedParticipant,
+      session: updatedSession
+    });
   }
 
   return formatIdentity({ participant, session });
@@ -118,11 +171,33 @@ function formatIdentity({ participant, session }) {
     participantId: participant.id,
     participantCode: participant.participant_code,
     conditionId: participant.condition_id,
+    conditionAssignmentIndex:
+      participant.condition_assignment_index ?? session.condition_assignment_index,
+    roomTourCondition: participant.room_tour_condition || session.room_tour_condition,
+    taskResponseCondition:
+      participant.task_response_condition || session.task_response_condition,
     sessionId: session.id,
     currentFlowStep: session.current_flow_step,
     sessionStatus: session.status,
     startedAt: session.started_at,
     lastSeenAt: session.last_seen_at
+  };
+}
+
+async function assignExperimentConditions(supabase) {
+  const { data, error } = await supabase
+    .rpc("assign_experiment_conditions")
+    .single();
+
+  if (error) {
+    throw toServiceError(error, "Could not assign experiment condition.");
+  }
+
+  return {
+    assignmentIndex: data.assignment_index,
+    conditionId: data.condition_id,
+    roomTourCondition: data.room_tour_condition,
+    taskResponseCondition: data.task_response_condition
   };
 }
 

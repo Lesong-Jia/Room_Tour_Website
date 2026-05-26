@@ -8,10 +8,10 @@ Return only valid JSON with this shape:
 }
 
 Use the Context fields targetItemId and targetItemLabel to know which item the robot asked about.
-The participant may answer in Chinese, English, or mixed language.
+The participant will answer in English.
 Be lenient: set "isAnswer" to true if the transcript is related to the target item, gives a likely explanation, mentions the object, describes its use, or substantially answers the robot's question. It does not need to be exact or complete.
 Set "isAnswer" to false only if the participant is clearly talking about something unrelated, says they do not know, refuses to answer, or gives no relevant content.
-Always write "summary" in English, even if the participant speaks Chinese.
+Always write "summary" in English.
 
 Target item references:
 1. trash can: white trash can for recyclable trash; black trash can for non-recyclable trash.

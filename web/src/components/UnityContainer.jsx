@@ -38,14 +38,14 @@ export default function UnityContainer({
       }
     }
 
-    window.addEventListener("keydown", stopUnityKeyboardCapture, true);
-    window.addEventListener("keyup", stopUnityKeyboardCapture, true);
-    window.addEventListener("keypress", stopUnityKeyboardCapture, true);
+    window.addEventListener("keydown", stopUnityKeyboardCapture);
+    window.addEventListener("keyup", stopUnityKeyboardCapture);
+    window.addEventListener("keypress", stopUnityKeyboardCapture);
 
     return () => {
-      window.removeEventListener("keydown", stopUnityKeyboardCapture, true);
-      window.removeEventListener("keyup", stopUnityKeyboardCapture, true);
-      window.removeEventListener("keypress", stopUnityKeyboardCapture, true);
+      window.removeEventListener("keydown", stopUnityKeyboardCapture);
+      window.removeEventListener("keyup", stopUnityKeyboardCapture);
+      window.removeEventListener("keypress", stopUnityKeyboardCapture);
     };
   }, []);
 

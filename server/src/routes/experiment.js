@@ -1,5 +1,8 @@
 import { Router } from "express";
-import { logExperimentEvent } from "../services/dataLogger.js";
+import {
+  clearCurrentFlowStepData,
+  logExperimentEvent
+} from "../services/dataLogger.js";
 import {
   resumeExperimentSession,
   startExperimentSession
@@ -12,6 +15,8 @@ router.post("/session/start", async (request, response, next) => {
     const identity = await startExperimentSession({
       currentFlowStep: request.body.currentFlowStep,
       conditionId: request.body.conditionId,
+      roomTourCondition: request.body.roomTourCondition,
+      taskResponseCondition: request.body.taskResponseCondition,
       userAgent: request.get("user-agent") || ""
     });
 
@@ -34,6 +39,15 @@ router.post("/event", async (request, response, next) => {
   try {
     await logExperimentEvent(request.body);
     response.json({ ok: true });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/session/clear-current-flow-step-data", async (request, response, next) => {
+  try {
+    const result = await clearCurrentFlowStepData(request.body);
+    response.json(result);
   } catch (error) {
     next(error);
   }

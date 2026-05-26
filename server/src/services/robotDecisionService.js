@@ -121,7 +121,7 @@ export async function decideRobotAction({ transcript, context }) {
   }
 
   if (flowStep === "room_tour_preference_followup") {
-    return decideRoomTourPreferenceFollowup({ transcript, flowStep });
+    return decideRoomTourPreferenceFollowup({ transcript, context, flowStep });
   }
 
   if (flowStep === "task_phase_instruction") {
@@ -258,10 +258,23 @@ async function decideRoomTourTargetAnswer({ transcript, context, flowStep }) {
   };
 }
 
-async function decideRoomTourPreferenceFollowup({ transcript, flowStep }) {
+async function decideRoomTourPreferenceFollowup({ transcript, context, flowStep }) {
   const instructions = await getPromptForFlowStep(flowStep);
   const rawAnswer = await classifyTranscript({ instructions, transcript });
   const classification = parseRoomTourPreferenceFollowupClassification(rawAnswer);
+  const sessionKey = getRoomTourSessionKey(context);
+  const progress = getRoomTourProgress(sessionKey);
+  const matchedItem = ROOM_TOUR_ITEMS.find(
+    (item) => item.id === classification.matchedItemId
+  );
+
+  if (classification.isRelevant && matchedItem) {
+    progress.coveredItemIds.add(matchedItem.id);
+
+    if (ROOM_TOUR_TARGET_ITEM_IDS.has(matchedItem.id)) {
+      progress.targetAnsweredItemIds.add(matchedItem.id);
+    }
+  }
 
   return {
     flowStep,
@@ -273,6 +286,10 @@ async function decideRoomTourPreferenceFollowup({ transcript, flowStep }) {
         : "unmatched_room_tour_preference",
     isComplete: classification.isComplete,
     summary: classification.summary,
+    matchedItemId: matchedItem?.id || null,
+    matchedItemLabel: matchedItem?.label || "",
+    coveredItemIds: Array.from(progress.coveredItemIds).sort((a, b) => a - b),
+    answeredTargetItemIds: Array.from(progress.targetAnsweredItemIds).sort((a, b) => a - b),
     confidence: classification.confidence,
     feedback: classification.isRelevant || classification.isComplete
       ? ""
@@ -449,17 +466,13 @@ function normalizeYesNo(answer) {
 function parseRoomTourClassification(answer) {
   try {
     const parsed = JSON.parse(extractJson(answer));
-    const matchedItemId = Number(parsed.matchedItemId);
     const confidence = Number(parsed.confidence);
 
     return {
       summary: cleanSummary(parsed.summary),
       isComplete: parsed.isComplete === true,
       isRoomDetail: parsed.isRoomDetail === true,
-      matchedItemId:
-        Number.isInteger(matchedItemId) && matchedItemId >= 1 && matchedItemId <= 8
-          ? matchedItemId
-          : null,
+      matchedItemId: normalizeRoomTourItemId(parsed.matchedItemId),
       confidence: Number.isFinite(confidence) ? confidence : 0
     };
   } catch {
@@ -501,6 +514,7 @@ function parseRoomTourPreferenceFollowupClassification(answer) {
       summary: cleanSummary(parsed.summary),
       isRelevant: parsed.isRelevant === true,
       isComplete: parsed.isComplete === true,
+      matchedItemId: normalizeRoomTourItemId(parsed.matchedItemId),
       confidence: Number.isFinite(confidence) ? confidence : 0
     };
   } catch {
@@ -508,9 +522,18 @@ function parseRoomTourPreferenceFollowupClassification(answer) {
       summary: cleanSummary(answer),
       isRelevant: false,
       isComplete: false,
+      matchedItemId: null,
       confidence: 0
     };
   }
+}
+
+function normalizeRoomTourItemId(value) {
+  const matchedItemId = Number(value);
+
+  return Number.isInteger(matchedItemId) && matchedItemId >= 1 && matchedItemId <= 8
+    ? matchedItemId
+    : null;
 }
 
 function parseTaskPhaseInstructionClassification(answer) {

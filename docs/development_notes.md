@@ -20,13 +20,31 @@ As of 2026-05-22, the project has also been prepared for hosted deployment:
   below 100 MiB.
 - Render environment variables hold OpenAI and Supabase secrets.
 
+As of 2026-05-25, the project has been prepared for CloudResearch testing:
+
+- The first three new sessions are assigned fixed coverage-check conditions:
+  `no_room_tour + just_ok`, `user_lead + explanation`, and
+  `robot_lead + confirmation_first`.
+- Starting at assignment index 3, new sessions cycle through all nine Room Tour
+  x task response condition combinations.
+- Condition assignment is now server-side and atomic through Supabase
+  `assign_experiment_conditions()`.
+- Raw participant audio, transcripts, decision outputs, and turn context are
+  stored in Supabase via `speech_turns` and the private `speech-turn-audio`
+  Storage bucket.
+- Current-page refresh keeps the same participant/session but clears
+  current-page submitted data from Supabase.
+- The final completion page displays CloudResearch completion code
+  `4CAD4C4248`.
+- The first welcome notice includes the native/fluent English requirement.
+
 Current full flow:
 
 ```text
 Welcome / audio calibration / Aria greeting
   -> Personal Background Questionnaire
-  -> Environment Introduction memory page, 3-minute timer
-  -> Room Tour
+  -> Environment Introduction memory page, 5-minute timer
+  -> optional Room Tour
   -> Phase 2 Task Phase using Unity Ex_Stage_1
   -> Phase 2 end questionnaire
   -> Many Days Later transition page
@@ -38,10 +56,10 @@ Welcome / audio calibration / Aria greeting
 Current deployable Unity data file sizes:
 
 ```text
-Welcome_Scene.data.br  97.00 MiB
-Room_Tour.data.br      98.06 MiB
-Ex_Stage_1.data.br     98.43 MiB
-Ex_Stage_2.data.br     98.40 MiB
+Welcome_Scene.data.br  78.10 MiB
+Room_Tour.data.br      85.21 MiB
+Ex_Stage_1.data.br     90.60 MiB
+Ex_Stage_2.data.br     90.58 MiB
 ```
 
 Key completed pieces in this milestone:
@@ -64,8 +82,8 @@ Key completed pieces in this milestone:
 - Final completion / thank-you page is implemented.
 - Supabase schema now includes:
   `room_tour_results`, `task_phase_trial_results`,
-  `task_phase_clarification_status`, and
-  `phase_end_questionnaire_submissions`.
+  `task_phase_clarification_status`, `phase_end_questionnaire_submissions`,
+  `speech_turns`, and `experiment_condition_assignment_counter`.
 - `task_phase_trial_results` includes `phase`, and uniqueness is
   `(session_id, phase, task_index)` so Phase 2 and Phase 3 rows do not overwrite
   one another.
@@ -119,7 +137,7 @@ Practice/welcome completion
   -> Frontend routes to the Environment Introduction memory page
   -> Participant sees only the centered instruction screen
   -> Participant clicks Start
-  -> 3-minute countdown starts
+  -> 5-minute countdown starts
   -> Floor Plan, Kitchen, and Living Room image/text sections appear
   -> When time reaches 0, the introduction content disappears
   -> Frontend shows Environment Introduction Complete with a Continue button
@@ -155,12 +173,12 @@ Initial screen:
   Environment Introduction
   Memorize Your Home Environment
   Centered instructions telling the participant that the next page contains
-  home-environment information and that they will have three minutes to remember it.
+  home-environment information and that they will have five minutes to remember it.
   Start button.
 
 After Start:
   Sticky countdown bar appears.
-  Timer begins at 3:00.
+  Timer begins at 5:00.
   The timer bar asks participants to memorize as much page information as possible.
   Floor Plan, Kitchen and Dining Area, and Living Room sections appear.
 
@@ -297,17 +315,17 @@ to:
 web/public/unity/Room_Tour
 ```
 
-The current build format is uncompressed. `RoomTourPage.jsx` expects:
+The current build format is Brotli-compressed. `RoomTourPage.jsx` expects:
 
 ```text
 web/public/unity/Room_Tour/Build/Room_Tour.loader.js
-web/public/unity/Room_Tour/Build/Room_Tour.data
-web/public/unity/Room_Tour/Build/Room_Tour.framework.js
-web/public/unity/Room_Tour/Build/Room_Tour.wasm
+web/public/unity/Room_Tour/Build/Room_Tour.data.br
+web/public/unity/Room_Tour/Build/Room_Tour.framework.js.br
+web/public/unity/Room_Tour/Build/Room_Tour.wasm.br
 ```
 
-If a future Unity export uses Brotli files again, update `RoomTourPage.jsx` back
-to `.data.br`, `.framework.js.br`, and `.wasm.br`.
+If a future Unity export switches compression format, update `RoomTourPage.jsx`
+and the server/Vite Brotli headers together.
 
 Important Unity Inspector fields on `Progress_Manager` /
 `Room_Tour_User_Lead_Process_Manager`:
@@ -556,12 +574,13 @@ PORT=3001
 WEB_ORIGIN=http://localhost:5173,http://127.0.0.1:5173
 ```
 
-Supabase variables may exist in `.env`, but the current welcome command test does not need to save audio:
+Supabase variables are required for hosted data collection and speech-turn
+audio/transcript logging:
 
 ```text
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
-SUPABASE_AUDIO_BUCKET=participant-audio
+SUPABASE_AUDIO_BUCKET=speech-turn-audio
 ```
 
 Never put real API keys in frontend files or Unity. OpenAI and Supabase service keys must stay in the backend.

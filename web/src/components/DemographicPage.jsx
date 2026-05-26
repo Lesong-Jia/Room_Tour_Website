@@ -215,6 +215,7 @@ export default function DemographicPage({ identity, onComplete }) {
                       onSingleAnswer={updateSingleAnswer}
                       onMultiAnswer={updateMultiAnswer}
                       onLikertAnswer={updateLikertAnswer}
+                      onNumberAnswer={updateSingleAnswer}
                       onOtherText={updateOtherText}
                     />
                   ))}
@@ -264,6 +265,7 @@ function QuestionField({
   onSingleAnswer,
   onMultiAnswer,
   onLikertAnswer,
+  onNumberAnswer,
   onOtherText
 }) {
   const options = getQuestionOptions(question, questionnaire);
@@ -319,6 +321,50 @@ function QuestionField({
             </label>
           ))}
         </div>
+      ) : null}
+
+      {question.type === "likert_single" ? (
+        <div className="likert-stack">
+          <div className="likert-item compact-likert-item">
+            <div
+              className="likert-options"
+              role="radiogroup"
+              aria-label={question.prompt}
+            >
+              {options.map((option) => (
+                <label className="likert-option" key={option.value}>
+                  <input
+                    type="radio"
+                    name={question.id}
+                    value={option.value}
+                    checked={value === option.value}
+                    disabled={disabled}
+                    onChange={() => onSingleAnswer(question.id, option.value)}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {question.type === "number" ? (
+        <label className="number-field">
+          <input
+            type="number"
+            inputMode="numeric"
+            aria-label={question.prompt}
+            min={question.min}
+            max={question.max}
+            step="1"
+            value={value || ""}
+            placeholder={question.placeholder || ""}
+            disabled={disabled}
+            onChange={(event) => onNumberAnswer(question.id, event.target.value)}
+          />
+          <span>years old</span>
+        </label>
       ) : null}
 
       {shouldShowOtherText(question, value) ? (
@@ -394,7 +440,7 @@ function isQuestionAnswered(question, answers, otherText) {
     return true;
   }
 
-  if (question.type === "single_choice") {
+  if (question.type === "single_choice" || question.type === "likert_single") {
     return Boolean(value) && hasRequiredOtherText(question, value, otherText);
   }
 
@@ -403,6 +449,18 @@ function isQuestionAnswered(question, answers, otherText) {
       Array.isArray(value) &&
       value.length > 0 &&
       hasRequiredOtherText(question, value, otherText)
+    );
+  }
+
+  if (question.type === "number") {
+    const numericValue = Number(value);
+
+    return (
+      value !== "" &&
+      value !== undefined &&
+      Number.isInteger(numericValue) &&
+      (question.min === undefined || numericValue >= question.min) &&
+      (question.max === undefined || numericValue <= question.max)
     );
   }
 
@@ -456,6 +514,10 @@ function getValidationMessage(question, answers) {
     return "Please answer every statement in this group.";
   }
 
+  if (question.type === "number") {
+    return `Please enter a whole number${question.min ? ` of at least ${question.min}` : ""}.`;
+  }
+
   return "Please choose an option.";
 }
 
@@ -481,17 +543,29 @@ function getQuestionOptions(question, questionnaire) {
 }
 
 function buildAnswerRecords(questions, answers, otherText, questionnaire) {
-  return questions.map((question) => ({
-    questionId: question.id,
-    exportTag: question.exportTag,
-    type: question.type,
-    prompt: question.prompt,
-    value: answers[question.id],
-    otherText: shouldShowOtherText(question, answers[question.id])
-      ? otherText[question.id] || ""
-      : "",
-    labels: getAnswerLabels(question, answers[question.id], questionnaire)
-  }));
+  return questions.map((question) => {
+    const value = answers[question.id];
+
+    return {
+      questionId: question.id,
+      exportTag: question.exportTag,
+      type: question.type,
+      prompt: question.prompt,
+      value,
+      otherText: shouldShowOtherText(question, value)
+        ? otherText[question.id] || ""
+        : "",
+      labels: getAnswerLabels(question, value, questionnaire),
+      ...(question.attentionCheckExpectedValue
+        ? {
+            metadata: {
+              expectedValue: question.attentionCheckExpectedValue,
+              passed: value === question.attentionCheckExpectedValue
+            }
+          }
+        : {})
+    };
+  });
 }
 
 function getAnswerLabels(question, value, questionnaire) {

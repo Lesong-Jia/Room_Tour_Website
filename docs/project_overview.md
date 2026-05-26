@@ -34,13 +34,14 @@ Entry / consent
   -> Final completion / debrief
 ```
 
-Current implemented local flow:
+Current implemented and deployable flow:
 
 ```text
-welcome
+experiment_notice
+  -> welcome / device check
   -> pre_experiment_questionnaire
   -> environment_intro
-  -> phase_2_room_tour
+  -> optional phase_2_room_tour
   -> next_experiment_placeholder / Phase 2 Task Phase / Ex_Stage_1
   -> phase_2_end_questionnaire
   -> phase_3_second_round / Many Days Later transition
@@ -48,6 +49,42 @@ welcome
   -> phase_3_end_questionnaire
   -> completion
 ```
+
+### Current Launch Configuration
+
+The current deployment is configured for CloudResearch data collection.
+
+- The first welcome notice requires participants to be native or fluent English
+  speakers, asks them to use a working microphone/headphones/keyboard/mouse, and
+  warns that attention checks may affect bonus eligibility.
+- The final page displays the CloudResearch completion code `4CAD4C4248`.
+- Environment Introduction uses a 5-minute memory timer.
+- Participant/session identity is stored in browser localStorage and verified
+  against Supabase on refresh. Refreshing a current page keeps the same
+  participant/session but clears data submitted for the current page only.
+- Speech turns are stored in Supabase:
+  - raw audio files in the private `speech-turn-audio` Storage bucket
+  - turn rows in `speech_turns`, including transcript, context, model decision,
+    flow step, phase, task id, and assigned conditions
+- Room Tour results are finalized in `room_tour_results`.
+- Task trial results are stored in `task_phase_trial_results`.
+- Task clarification marks are stored in `task_phase_clarification_status` with
+  a `phase` field so first-day and many-days-later task phases do not overwrite
+  each other.
+
+Conditions are assigned server-side by the Supabase function
+`assign_experiment_conditions()`:
+
+```text
+assignment 0: no_room_tour + just_ok
+assignment 1: user_lead + explanation
+assignment 2: robot_lead + confirmation_first
+assignment 3+: all 9 combinations in repeating order
+```
+
+The assignment counter lives in `experiment_condition_assignment_counter`.
+Because the assignment happens inside a database update, concurrent new
+participants are assigned distinct sequential indices.
 
 ### Pre-Experiment Stage: Practice and Device Calibration
 
@@ -104,12 +141,12 @@ This questionnaire should be linked to the participant and session, but it shoul
 
 ### Formal Phase 1: Room Information Memory
 
-Participants are given room-related information to memorize within 3 minutes.
+Participants are given room-related information to memorize within 5 minutes.
 
 The website should manage this phase, including:
 
 - Showing room information, object descriptions, spatial relationships, or other study materials.
-- Running the 3-minute timer.
+- Running the 5-minute timer.
 - Recording phase start and end times.
 - Optionally recording comprehension checks or confidence ratings.
 - Moving the participant to the next phase when the timer ends or when the participant proceeds.
@@ -123,7 +160,7 @@ Current implementation status for the Environment Introduction memory page:
 - The first screen shows centered instructions with the title
   `Environment Introduction`, subtitle `Memorize Your Home Environment`, and a
   `Start` button.
-- The 3-minute countdown starts only after the participant clicks `Start`.
+- The 5-minute countdown starts only after the participant clicks `Start`.
 - During the timed memory period, a sticky countdown stays visible while the
   participant scrolls.
 - The room information is organized into three sections: Floor Plan, Kitchen and
@@ -149,8 +186,8 @@ Current implementation status for the Room Tour page:
   Environment Introduction.
 - The frontend loads the Unity WebGL build from
   `web/public/unity/Room_Tour`.
-- The current Room Tour build uses uncompressed Unity files:
-  `Room_Tour.data`, `Room_Tour.framework.js`, and `Room_Tour.wasm`.
+- The current Room Tour build uses Brotli-compressed Unity files:
+  `Room_Tour.data.br`, `Room_Tour.framework.js.br`, and `Room_Tour.wasm.br`.
 - The active Unity command target is `Progress_Manager.HandleHostCommand`.
 - The participant clicks a web overlay button to begin the Room Tour. Unity then
   plays the assigned intro clip from `Room_Tour_User_Lead_Process_Manager`.
@@ -199,9 +236,9 @@ Current implementation status for the Room Tour page:
 - When the participant says they have nothing else to add in the preference
   stage, the frontend uploads final Room Tour data to Supabase and then routes
   to a full-page Room Tour completion screen.
-- Refreshing or re-entering the Room Tour page clears the backend's temporary
-  Room Tour progress for that session. Previously uploaded final results are
-  not deleted.
+- Refreshing the Room Tour page clears current-page Room Tour data for that
+  session, including `room_tour_results`, Room Tour `speech_turns`, associated
+  raw audio files, and the backend's temporary Room Tour progress.
 
 The expected interaction loop for each instruction trial is:
 
@@ -405,7 +442,7 @@ It should handle:
 - Participant ID and condition assignment.
 - Practice flow and device calibration checks.
 - Phase transitions.
-- The 3-minute memory timer.
+- The 5-minute memory timer.
 - Browser microphone permission.
 - Audio recording.
 - Audio upload to the backend.

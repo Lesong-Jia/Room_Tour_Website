@@ -30,6 +30,112 @@ button {
   padding: 32px;
 }
 
+.experiment-progress {
+  display: grid;
+  gap: 10px;
+  max-width: 1120px;
+  margin: 0 auto 18px;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.94);
+  padding: 14px 16px 12px;
+  box-shadow: 0 12px 32px rgba(40, 49, 59, 0.07);
+}
+
+.experiment-progress-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 16px;
+  align-items: center;
+}
+
+.experiment-progress-summary span,
+.experiment-progress-summary small,
+.experiment-progress-summary strong {
+  color: #20242c;
+  font-size: 0.9rem;
+  font-weight: 900;
+}
+
+.experiment-progress-summary small {
+  overflow: hidden;
+  color: #4f5967;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.experiment-progress-summary strong {
+  color: #1f6f68;
+}
+
+.experiment-progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e4e9ee;
+}
+
+.experiment-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #1f6f68;
+  transition: width 180ms ease;
+}
+
+.experiment-progress-steps {
+  display: grid;
+  grid-template-columns: repeat(var(--progress-step-count), minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.experiment-progress-steps li {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: #6a7481;
+  text-align: center;
+}
+
+.experiment-progress-steps li > span {
+  width: 10px;
+  height: 10px;
+  border: 2px solid #cdd5dd;
+  border-radius: 999px;
+  background: #ffffff;
+}
+
+.experiment-progress-steps small {
+  width: 100%;
+  overflow: hidden;
+  color: inherit;
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.experiment-progress-steps li.completed,
+.experiment-progress-steps li.current {
+  color: #1f6f68;
+}
+
+.experiment-progress-steps li.completed > span,
+.experiment-progress-steps li.current > span {
+  border-color: #1f6f68;
+  background: #1f6f68;
+}
+
+.experiment-progress-steps li.current > span {
+  box-shadow: 0 0 0 4px rgba(31, 111, 104, 0.16);
+}
+
 .experiment-layout {
   display: grid;
   grid-template-columns: 1fr;
@@ -103,6 +209,67 @@ button {
 .intro-copy p {
   margin: 0;
   max-width: none;
+}
+
+.centered-copy {
+  text-align: center;
+}
+
+.experiment-notice-panel {
+  display: grid;
+  gap: 22px;
+  max-width: 860px;
+  margin: 0 auto;
+  border-top: 4px solid #1f6f68;
+  justify-items: center;
+  text-align: center;
+}
+
+.experiment-notice-copy {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+}
+
+.experiment-notice-copy h1 {
+  margin-bottom: 2px;
+}
+
+.experiment-notice-copy p {
+  max-width: 74ch;
+  color: #3d4652;
+  font-size: 1rem;
+}
+
+.experiment-notice-sections {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 760px);
+  margin: 4px 0;
+}
+
+.experiment-notice-sections section {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: #f8fafb;
+  padding: 16px 18px;
+}
+
+.experiment-notice-sections h2 {
+  margin: 0;
+  color: #161a22;
+  font-size: 1rem;
+}
+
+.experiment-notice-sections p {
+  margin: 0;
+}
+
+.experiment-notice-panel .primary-action {
+  justify-self: center;
+  min-width: 180px;
 }
 
 .scroll-cue {
@@ -592,7 +759,7 @@ button {
 }
 
 .room-tour-record-overlay p {
-  max-height: 6em;
+  max-height: 7.5em;
   overflow-y: auto;
   pointer-events: auto;
 }
@@ -724,6 +891,12 @@ button {
   justify-items: center;
   text-align: center;
   text-transform: none;
+}
+
+.audio-check-panel {
+  display: grid;
+  justify-items: center;
+  border-top: 4px solid #1f6f68;
 }
 
 .audio-check-card h3 {
@@ -951,6 +1124,29 @@ button {
   font-weight: 800;
 }
 
+.completion-code-panel {
+  display: grid;
+  gap: 8px;
+  width: min(100%, 360px);
+  margin-top: 22px;
+  border: 1px solid #cdd5dd;
+  border-radius: 8px;
+  background: #f7faf9;
+  padding: 18px;
+}
+
+.completion-code-panel span {
+  color: #4f5967;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.completion-code-panel strong {
+  color: #161a22;
+  font-size: 1.9rem;
+  letter-spacing: 0;
+}
+
 .environment-timer {
   position: sticky;
   top: 16px;
@@ -1154,6 +1350,85 @@ button {
   gap: 14px;
 }
 
+.task-evaluation-stack {
+  display: grid;
+  gap: 18px;
+}
+
+.task-evaluation-group {
+  display: grid;
+  gap: 14px;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 16px;
+}
+
+.task-evaluation-group-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5eaee;
+}
+
+.task-evaluation-group-heading h3 {
+  margin: 0;
+  color: #161a22;
+  font-size: 1.02rem;
+  font-weight: 950;
+  line-height: 1.35;
+}
+
+.task-evaluation-group-heading span {
+  flex: 0 0 auto;
+  color: #4f5967;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.open-ended-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.open-ended-field textarea {
+  width: 100%;
+  min-height: 132px;
+  resize: vertical;
+  border: 1px solid #cdd5dd;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #161a22;
+  font: inherit;
+  line-height: 1.5;
+  padding: 12px 14px;
+  outline: none;
+}
+
+.open-ended-field textarea::placeholder {
+  color: #7a8491;
+}
+
+.open-ended-field textarea:focus-visible {
+  outline: 3px solid rgba(31, 111, 104, 0.26);
+  outline-offset: 2px;
+}
+
+.open-ended-footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.open-ended-footer span {
+  color: #4f5967;
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
 .question-field {
   display: grid;
   gap: 14px;
@@ -1219,6 +1494,7 @@ button {
 
 .choice-option:has(input:focus-visible),
 .likert-option:has(input:focus-visible),
+.number-field:has(input:focus-visible),
 .other-text-field input:focus-visible {
   outline: 3px solid rgba(31, 111, 104, 0.26);
   outline-offset: 2px;
@@ -1248,6 +1524,50 @@ button {
   padding: 0 12px;
 }
 
+.number-field {
+  display: inline-flex;
+  align-items: center;
+  width: min(100%, 280px);
+  min-height: 48px;
+  border: 1px solid #cdd5dd;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #20242c;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  overflow: hidden;
+}
+
+.number-field input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: #161a22;
+  font: inherit;
+  font-size: 1rem;
+  font-weight: 800;
+  padding: 0 14px;
+  outline: none;
+}
+
+.number-field input::placeholder {
+  color: #7a8491;
+  font-weight: 700;
+}
+
+.number-field span {
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  border-left: 1px solid #e0e6eb;
+  background: #f4f7f8;
+  color: #4f5967;
+  font-size: 0.9rem;
+  font-weight: 800;
+  padding: 0 13px;
+  white-space: nowrap;
+}
+
 .likert-stack {
   display: grid;
   gap: 12px;
@@ -1263,6 +1583,11 @@ button {
 .likert-item:first-child {
   border-top: 0;
   padding-top: 0;
+}
+
+.compact-likert-item {
+  padding: 0;
+  border-top: 0;
 }
 
 .likert-item p {
@@ -1477,6 +1802,26 @@ button {
 @media (max-width: 860px) {
   .app-shell {
     padding: 16px;
+  }
+
+  .experiment-progress {
+    padding: 12px;
+  }
+
+  .experiment-progress-summary {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+  }
+
+  .experiment-progress-summary small {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .experiment-progress-steps {
+    overflow-x: auto;
+    grid-template-columns: repeat(var(--progress-step-count), minmax(78px, 1fr));
+    padding-bottom: 2px;
   }
 
   .experiment-layout {

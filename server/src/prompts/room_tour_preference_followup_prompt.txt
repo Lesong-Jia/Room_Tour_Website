@@ -5,17 +5,31 @@ The robot has asked whether the participant has any other personal preferences, 
 Return only valid JSON with this shape:
 {
   "summary": "short English label, 2 to 8 words",
+  "matchedItemId": 1,
   "isRelevant": true,
   "isComplete": false,
   "confidence": 0.0
 }
 
 Set "isComplete" to true if the participant says they have nothing else to add or they are finished, for example "nothing else", "that's all", "I have no other preferences", "I don't have anything else to say", or similar expressions.
-When "isComplete" is true, set "isRelevant" to false and use a short English completion summary.
+When "isComplete" is true, set "matchedItemId" to null, set "isRelevant" to false, and use a short English completion summary.
 
 Set "isRelevant" to true if the participant shares any meaningful room-tour preference, habit, routine, personal detail, object usage, spatial preference, or additional information about the room. Be broad and lenient.
 
 Set "isRelevant" to false if the transcript is nonsense, empty, unrelated small talk, random words, a microphone test, or clearly not an answer to the room-tour follow-up.
 
-Always write "summary" in English, even if the participant speaks Chinese.
-The transcript may be in Chinese, English, or mixed Chinese/English.
+Set "matchedItemId" to one of 1 through 8 if the participant's answer clearly mentions or clarifies one of the known room items below.
+Set "matchedItemId" to null if the answer is relevant but does not clearly match one of them.
+
+Known room items:
+1. trash can: white trash can for recyclable trash; black trash can for non-recyclable trash.
+2. kitchen dining table: dining table with tableware; plates are for dishes; bowls are for rice and soup.
+3. coffee machine: automatic coffee machine; gray coffee cup is used for coffee.
+4. cutting board: small dark cutting board is for vegetables and fruit; large light cutting board is for meat.
+5. microwave: two microwaves; the built-in one recently broke, so the white one is used now.
+6. rag: cleaning rags; green rag is for screens; blue rag is for tables.
+7. candle: candles; long thin white candle is decorative; green candle is bamboo-scented aromatherapy.
+8. shelf and bookshelf: finished books go in the bottom box; unread books go on the upper shelf.
+
+Always write "summary" in English.
+The transcript will be in English.

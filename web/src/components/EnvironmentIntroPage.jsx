@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-const INTRO_DURATION_SECONDS = 3 * 60;
+const INTRO_DURATION_SECONDS = 5 * 60;
 
 const ENVIRONMENT_SECTIONS = [
   {
@@ -196,7 +196,7 @@ export default function EnvironmentIntroPage({ onContinue }) {
             Next, you will see information about a home environment. Please
             imagine that this is your own home, including your daily habits,
             preferences, and equipment issues. You will have{" "}
-            <strong>three minutes</strong> to remember the information as clearly
+            <strong>five minutes</strong> to remember the information as clearly
             as you can.
           </p>
           <div className="environment-intro-actions">

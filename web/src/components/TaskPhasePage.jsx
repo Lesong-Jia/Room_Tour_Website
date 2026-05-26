@@ -4,6 +4,7 @@ import {
   markTaskPhaseClarification,
   submitTaskPhaseTrialResult
 } from "../experiment/api.js";
+import { recordCompletedTaskPhaseTask } from "../experiment/completedTaskPhaseTasks.js";
 import { sendUnityCommand } from "../experiment/unityBridge.js";
 import UnityContainer from "./UnityContainer.jsx";
 import VoiceRecorder from "./VoiceRecorder.jsx";
@@ -117,16 +118,8 @@ const RANDOM_TASK_RESULTS = {
 
 const LIKERT_ITEMS = [
   {
-    id: "difficulty",
-    label: "How difficult would this task be for a robot to perform?"
-  },
-  {
-    id: "danger",
-    label: "How dangerous would this task be for a robot to perform?"
-  },
-  {
     id: "experience",
-    label: "How was your interaction experience with the robot in this task?"
+    label: "How was your experience with the robot, especially the robot's voice feedback in this task?"
   },
   {
     id: "trust",
@@ -135,8 +128,6 @@ const LIKERT_ITEMS = [
 ];
 
 const INITIAL_RATINGS = {
-  difficulty: "",
-  danger: "",
   experience: "",
   trust: ""
 };
@@ -162,6 +153,7 @@ export default function TaskPhasePage({
   const [clarifiedTasks, setClarifiedTasks] = useState({});
   const [completed, setCompleted] = useState(false);
   const completedTasksRef = useRef([]);
+  const taskResponseCondition = identity?.taskResponseCondition || "";
 
   const unityConfig = useMemo(
     () => ({
@@ -191,6 +183,16 @@ export default function TaskPhasePage({
         setUnityStatus("");
       }
 
+      if (detail?.type === "task_phase_response_condition_requested") {
+        sendUnityCommand(
+          {
+            type: "set_task_phase_response_condition",
+            taskResponseCondition
+          },
+          TASK_PHASE_UNITY_COMMAND_TARGET
+        );
+      }
+
       if (detail?.type === "task_instruction_ready") {
         setCurrentTask(toTaskState(detail));
         setTaskPhase("instruction");
@@ -203,6 +205,15 @@ export default function TaskPhasePage({
         setCurrentTask((task) => ({ ...task, ...toTaskState(detail) }));
         setTaskPhase("start_reply");
         setFeedback("");
+      }
+
+      if (detail?.type === "task_start_reply_rejected") {
+        setCurrentTask((task) => ({
+          ...task,
+          taskId: normalizeTaskId(detail.taskId) || task?.taskId || ""
+        }));
+        setTaskPhase("instruction");
+        setFeedback(getInstructionRetryMessage());
       }
 
       if (detail?.type === "task_clarification_ready") {
@@ -245,7 +256,7 @@ export default function TaskPhasePage({
     return () => {
       window.removeEventListener("unity-experiment-event", handleUnityEvent);
     };
-  }, [onComplete]);
+  }, [onComplete, taskResponseCondition]);
 
   useEffect(() => {
     if (!identity?.sessionId) {
@@ -262,7 +273,7 @@ export default function TaskPhasePage({
       .then((result) => {
         if (!canceled) {
           setClarifiedTasks(result.clarifiedTasks || {});
-          writeStoredClarifications(result.clarifiedTasks || {});
+          writeStoredClarifications(identity.sessionId, result.clarifiedTasks || {});
         }
       })
       .catch((error) => {
@@ -285,7 +296,10 @@ export default function TaskPhasePage({
     setFeedback("");
 
     window.requestAnimationFrame(() => {
-      sendUnityCommand({ type: "start_task_phase" }, TASK_PHASE_UNITY_COMMAND_TARGET);
+      sendUnityCommand(
+        { type: "start_task_phase" },
+        TASK_PHASE_UNITY_COMMAND_TARGET
+      );
     });
   }
 
@@ -316,7 +330,11 @@ export default function TaskPhasePage({
       if (decision.unityCommand) {
         setFeedback("");
         setTaskPhase("robot_response");
-        setLastOutcome(getOutcomeForStartReply(currentTask, decision.answer));
+        setLastOutcome(
+          !currentTask?.condition && decision.answer === "no"
+            ? null
+            : getOutcomeForStartReply(currentTask, decision.answer)
+        );
         sendUnityCommand(decision.unityCommand, TASK_PHASE_UNITY_COMMAND_TARGET);
         return;
       }
@@ -352,7 +370,7 @@ export default function TaskPhasePage({
         ...currentTasks,
         [taskId]: true
       };
-      writeStoredClarifications(nextTasks);
+      writeStoredClarifications(identity.sessionId, nextTasks);
       return nextTasks;
     });
 
@@ -360,6 +378,7 @@ export default function TaskPhasePage({
       participantId: identity.participantId,
       participantCode: identity.participantCode,
       sessionId: identity.sessionId,
+      phase,
       taskId,
       clarified: true,
       source,
@@ -375,7 +394,7 @@ export default function TaskPhasePage({
     event.preventDefault();
 
     if (LIKERT_ITEMS.some((item) => !ratings[item.id])) {
-      setRatingError("Please answer all four ratings before continuing.");
+      setRatingError("Please answer both ratings before continuing.");
       return;
     }
 
@@ -389,12 +408,14 @@ export default function TaskPhasePage({
         taskIndex: currentTask?.taskIndex,
         taskCount: currentTask?.taskCount,
         condition: currentTask?.condition || "",
+        taskResponseCondition,
         phase,
         outcome: lastOutcome?.outcome || getDefaultOutcome(currentTask).outcome,
         ratings,
         submittedAtBrowser: completedAtBrowser,
         metadata: {
-          phase
+          phase,
+          taskResponseCondition
         }
       };
 
@@ -407,6 +428,16 @@ export default function TaskPhasePage({
           completedAtBrowser
         }
       ];
+      recordCompletedTaskPhaseTask(identity?.sessionId, {
+        taskId: resultPayload.taskId,
+        taskIndex: resultPayload.taskIndex,
+        taskCount: resultPayload.taskCount,
+        phase: resultPayload.phase,
+        condition: resultPayload.condition,
+        outcome: resultPayload.outcome,
+        taskResponseCondition,
+        completedAtBrowser
+      });
 
       setRatings({ ...INITIAL_RATINGS });
       setRatingError("");
@@ -429,9 +460,10 @@ export default function TaskPhasePage({
       flowStep: getVoiceFlowStep(taskPhase),
       taskId: currentTask?.taskId || "",
       condition: currentTask?.condition || "",
+      taskResponseCondition,
       clarificationAlreadyAnswered:
         clarifiedTasks[currentTask?.taskId] === true ||
-        getStoredClarificationAnswered(currentTask?.taskId)
+        getStoredClarificationAnswered(identity?.sessionId, currentTask?.taskId)
     },
     identity
   );
@@ -687,14 +719,14 @@ function getDefaultOutcome(task) {
   };
 }
 
-function getStoredClarificationAnswered(taskId) {
-  if (!taskId || typeof window === "undefined") {
+function getStoredClarificationAnswered(sessionId, taskId) {
+  if (!sessionId || !taskId || typeof window === "undefined") {
     return false;
   }
 
   try {
     const stored = JSON.parse(
-      window.localStorage.getItem("humanRobotExperiment.fixedClarifications") || "{}"
+      window.localStorage.getItem(getClarificationsStorageKey(sessionId)) || "{}"
     );
     return stored[taskId] === true;
   } catch {
@@ -702,15 +734,19 @@ function getStoredClarificationAnswered(taskId) {
   }
 }
 
-function writeStoredClarifications(clarifiedTasks) {
-  if (typeof window === "undefined") {
+function writeStoredClarifications(sessionId, clarifiedTasks) {
+  if (!sessionId || typeof window === "undefined") {
     return;
   }
 
   window.localStorage.setItem(
-    "humanRobotExperiment.fixedClarifications",
+    getClarificationsStorageKey(sessionId),
     JSON.stringify(clarifiedTasks || {})
   );
+}
+
+function getClarificationsStorageKey(sessionId) {
+  return `humanRobotExperiment.fixedClarifications:${sessionId}`;
 }
 
 function toTaskState(detail) {
@@ -753,6 +789,9 @@ function withIdentity(context, identity) {
     ...context,
     participantId: identity.participantId,
     participantCode: identity.participantCode,
-    sessionId: identity.sessionId
+    sessionId: identity.sessionId,
+    roomTourCondition: identity.roomTourCondition,
+    taskResponseCondition:
+      identity.taskResponseCondition || context.taskResponseCondition
   };
 }

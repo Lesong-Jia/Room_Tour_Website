@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import DemographicPage from "./components/DemographicPage.jsx";
 import EnvironmentIntroPage from "./components/EnvironmentIntroPage.jsx";
 import ExperimentCompletePage from "./components/ExperimentCompletePage.jsx";
+import ExperimentNoticePage from "./components/ExperimentNoticePage.jsx";
 import PhaseController from "./components/PhaseController.jsx";
 import PhaseThreeIntroPage from "./components/PhaseThreeIntroPage.jsx";
 import PostInteractionQuestionnairePage from "./components/PostInteractionQuestionnairePage.jsx";
@@ -12,8 +13,12 @@ import {
   readStoredIdentity,
   updateStoredFlowStep
 } from "./experiment/session.js";
+import {
+  isNoRoomTourCondition
+} from "./experiment/roomTourCondition.js";
 
 const FLOW_STEP_TO_PAGE = {
+  experiment_notice: "experiment_notice",
   welcome: "welcome",
   practice_calibration: "welcome",
   pre_experiment_questionnaire: "demographic",
@@ -28,6 +33,27 @@ const FLOW_STEP_TO_PAGE = {
   completion: "completion"
 };
 
+const BASE_PROGRESS_STEPS = [
+  { pages: ["experiment_notice"], label: "Welcome" },
+  { pages: ["welcome"], label: "Device Check" },
+  { pages: ["demographic"], label: "Pre-Survey" },
+  { pages: ["environment_intro"], label: "Environment Intro" },
+  {
+    pages: ["next_experiment_placeholder", "phase_2_end_questionnaire"],
+    label: "First Day Tasks"
+  },
+  {
+    pages: ["phase_3_second_round", "phase_3_task_phase", "phase_3_end_questionnaire"],
+    label: "Many Days Later Tasks"
+  },
+  { pages: ["completion"], label: "Complete" }
+];
+
+const ROOM_TOUR_PROGRESS_STEP = {
+  pages: ["room_tour"],
+  label: "First Day Room Tour"
+};
+
 export default function App() {
   const cachedIdentity = getInitialIdentity();
   const previewFlowStep = getPreviewFlowStep();
@@ -39,6 +65,8 @@ export default function App() {
     cachedIdentity ? "ready" : "loading"
   );
   const [identityError, setIdentityError] = useState("");
+  const roomTourCondition = identity?.roomTourCondition;
+  const progressSteps = getProgressSteps(roomTourCondition);
 
   useEffect(() => {
     let canceled = false;
@@ -111,6 +139,12 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      <ExperimentProgressBar currentPage={page} steps={progressSteps} />
+
+      {page === "experiment_notice" ? (
+        <ExperimentNoticePage onContinue={() => goToPage("welcome", "welcome")} />
+      ) : null}
+
       {page === "welcome" ? (
         <PhaseController
           identity={identity}
@@ -130,7 +164,12 @@ export default function App() {
       {page === "environment_intro" ? (
         <EnvironmentIntroPage
           onContinue={() =>
-            goToPage("room_tour", "phase_2_room_tour")
+            isNoRoomTourCondition(roomTourCondition)
+              ? goToPage(
+                  "next_experiment_placeholder",
+                  "next_experiment_placeholder"
+                )
+              : goToPage("room_tour", "phase_2_room_tour")
           }
         />
       ) : null}
@@ -208,8 +247,72 @@ export default function App() {
   );
 }
 
+function ExperimentProgressBar({ currentPage, steps }) {
+  const currentIndex = Math.max(
+    0,
+    steps.findIndex((step) => step.pages.includes(currentPage))
+  );
+  const percent =
+    steps.length <= 1
+      ? 100
+      : Math.round((currentIndex / (steps.length - 1)) * 100);
+  const currentStep = steps[currentIndex] || steps[0];
+
+  return (
+    <section
+      className="experiment-progress"
+      aria-label="Experiment progress"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={percent}
+      role="progressbar"
+    >
+      <div className="experiment-progress-summary">
+        <span>Experiment Progress</span>
+        <small>{currentStep?.label || ""}</small>
+        <strong>{percent}%</strong>
+      </div>
+      <div className="experiment-progress-track" aria-hidden="true">
+        <span style={{ width: `${percent}%` }} />
+      </div>
+      <ol
+        className="experiment-progress-steps"
+        style={{ "--progress-step-count": steps.length }}
+      >
+        {steps.map((step, index) => (
+          <li
+            className={
+              index < currentIndex
+                ? "completed"
+                : index === currentIndex
+                  ? "current"
+                  : ""
+            }
+            key={step.label}
+          >
+            <span />
+            <small>{step.label}</small>
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 function getPageFromFlowStep(flowStep) {
-  return FLOW_STEP_TO_PAGE[flowStep] || "welcome";
+  return FLOW_STEP_TO_PAGE[flowStep] || "experiment_notice";
+}
+
+function getProgressSteps(roomTourCondition) {
+  if (!isNoRoomTourCondition(roomTourCondition)) {
+    return [
+      ...BASE_PROGRESS_STEPS.slice(0, 3),
+      ROOM_TOUR_PROGRESS_STEP,
+      ...BASE_PROGRESS_STEPS.slice(3)
+    ];
+  }
+
+  return BASE_PROGRESS_STEPS;
 }
 
 function getInitialIdentity() {

@@ -27,6 +27,10 @@ export async function resumeExperimentSession(payload) {
   return postJson("/api/experiment/session/resume", payload);
 }
 
+export async function clearCurrentFlowStepData(payload) {
+  return postJson("/api/experiment/session/clear-current-flow-step-data", payload);
+}
+
 export async function uploadSpeechTurn(formData) {
   const response = await fetch(`${API_BASE_URL}/api/speech/turn`, {
     method: "POST",

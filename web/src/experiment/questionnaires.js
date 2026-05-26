@@ -73,18 +73,12 @@ export const preExperimentQuestionnaire = {
         {
           id: "QID3",
           exportTag: "Age",
-          type: "single_choice",
+          type: "number",
           prompt: "How old are you?",
           required: true,
-          options: [
-            { value: "1", label: "18-24 years old" },
-            { value: "2", label: "25-34 years old" },
-            { value: "3", label: "35-44 years old" },
-            { value: "4", label: "45-54 years old" },
-            { value: "5", label: "55-64 years old" },
-            { value: "6", label: "65+ years old" },
-            { value: "7", label: "Prefer not to say" }
-          ]
+          min: 18,
+          max: 120,
+          placeholder: "Enter your age"
         },
         {
           id: "QID4",
@@ -135,7 +129,7 @@ export const preExperimentQuestionnaire = {
         {
           id: "QID6",
           exportTag: "Q6",
-          type: "single_choice",
+          type: "likert_single",
           prompt:
             "How much experience have you had with robot vacuums / mopping robots?",
           required: true,
@@ -148,7 +142,7 @@ export const preExperimentQuestionnaire = {
         {
           id: "QID7",
           exportTag: "Q7",
-          type: "single_choice",
+          type: "likert_single",
           prompt:
             "How much experience have you had with smart home robots / companion robots?",
           required: true,
@@ -161,7 +155,7 @@ export const preExperimentQuestionnaire = {
         {
           id: "QID8",
           exportTag: "Q8",
-          type: "single_choice",
+          type: "likert_single",
           prompt: "How much experience have you had with delivery robots?",
           required: true,
           optionsRef: "experienceScaleOptions",
@@ -173,7 +167,7 @@ export const preExperimentQuestionnaire = {
         {
           id: "QID10",
           exportTag: "Q10",
-          type: "single_choice",
+          type: "likert_single",
           prompt: "How much experience have you had with robotic arms?",
           required: true,
           optionsRef: "experienceScaleOptions",
@@ -185,7 +179,7 @@ export const preExperimentQuestionnaire = {
         {
           id: "QID11",
           exportTag: "Q11",
-          type: "single_choice",
+          type: "likert_single",
           prompt: "How much experience have you had with educational robots?",
           required: true,
           optionsRef: "experienceScaleOptions",
@@ -197,7 +191,7 @@ export const preExperimentQuestionnaire = {
         {
           id: "QID9",
           exportTag: "Q9",
-          type: "single_choice",
+          type: "likert_single",
           prompt: "How much experience have you had with the robot type you described?",
           required: true,
           optionsRef: "experienceScaleOptions",
@@ -303,6 +297,16 @@ export const preExperimentQuestionnaire = {
               text: "I see myself as someone who has an active imagination."
             }
           ]
+        },
+        {
+          id: "QID_ATTENTION_1",
+          exportTag: "Pre_Attention_Check",
+          type: "likert_single",
+          prompt:
+            "To confirm that you are paying attention, please select Agree a little.",
+          required: true,
+          optionsRef: "scaleOptions",
+          attentionCheckExpectedValue: "4"
         }
       ]
     }

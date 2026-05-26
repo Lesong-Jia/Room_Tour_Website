@@ -54,11 +54,6 @@ export default function PhaseController({ identity, onContinue }) {
         </button>
       </div>
     ) : null;
-  const preStartOverlay = audioCheckPassed ? null : (
-    <div className="scene-cover">
-      <AudioPlaybackCheck onPassed={() => setAudioCheckPassed(true)} />
-    </div>
-  );
 
   useEffect(() => {
     function handleUnityEvent(event) {
@@ -108,18 +103,9 @@ export default function PhaseController({ identity, onContinue }) {
     <section className="experiment-layout">
       <header className="panel intro-panel">
         <div className="intro-copy">
-          <h1>Welcome to Our Experiment</h1>
-          <p>
-            Welcome to the experiment. To make sure the experiment runs
-            smoothly, please use a computer with the Chrome browser, and make
-            sure you have a working microphone, headphones, keyboard, and mouse.
-            If the webpage asks for permission to record audio, please allow
-            microphone access.
-          </p>
-          <p>
-            This welcome interaction will help you verify these requirements and
-            establish an initial connection with the robot. When you are ready,
-            let&apos;s begin.
+          <h1>Device Check</h1>
+          <p className="centered-copy">
+            Please complete the checks below before entering the experiment.
           </p>
         </div>
 
@@ -128,19 +114,24 @@ export default function PhaseController({ identity, onContinue }) {
         </div>
       </header>
 
-      <UnityContainer
-        sceneStarted={sceneStarted}
-        completionOverlay={completionOverlay}
-        preStartOverlay={preStartOverlay}
-      >
-        {shouldShowVoiceRecorder ? (
-          <VoiceRecorder
-            context={voiceContext}
-            feedback={sceneFeedback}
-            onDecision={handleVoiceDecision}
-          />
-        ) : null}
-      </UnityContainer>
+      {!audioCheckPassed ? (
+        <section className="panel audio-check-panel">
+          <AudioPlaybackCheck onPassed={() => setAudioCheckPassed(true)} />
+        </section>
+      ) : (
+        <UnityContainer
+          sceneStarted={sceneStarted}
+          completionOverlay={completionOverlay}
+        >
+          {shouldShowVoiceRecorder ? (
+            <VoiceRecorder
+              context={voiceContext}
+              feedback={sceneFeedback}
+              onDecision={handleVoiceDecision}
+            />
+          ) : null}
+        </UnityContainer>
+      )}
     </section>
   );
 }
@@ -184,6 +175,8 @@ function withIdentity(context, identity) {
     ...context,
     participantId: identity.participantId,
     participantCode: identity.participantCode,
-    sessionId: identity.sessionId
+    sessionId: identity.sessionId,
+    roomTourCondition: identity.roomTourCondition,
+    taskResponseCondition: identity.taskResponseCondition
   };
 }

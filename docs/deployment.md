@@ -1,6 +1,6 @@
 # Deployment Guide
 
-Last updated: 2026-05-22.
+Last updated: 2026-05-25.
 
 The current deployment path is a single Render Web Service:
 
@@ -15,9 +15,11 @@ Render Web Service
 Supabase
   - participants
   - sessions
+  - atomic condition assignment counter
   - questionnaires
   - room-tour results
   - task-phase results
+  - speech turns and private speech audio storage
 ```
 
 This is intentionally simpler than splitting frontend and backend across two
@@ -67,10 +69,10 @@ web/public/unity/
 The current deployable Unity data files are below GitHub's 100 MiB hard limit:
 
 ```text
-web/public/unity/Welcome_Scene/Build/Welcome_Scene.data.br  97.00 MiB
-web/public/unity/Room_Tour/Build/Room_Tour.data.br          98.06 MiB
-web/public/unity/Ex_Stage_1/Build/Ex_Stage_1.data.br        98.43 MiB
-web/public/unity/Ex_Stage_2/Build/Ex_Stage_2.data.br        98.40 MiB
+web/public/unity/Welcome_Scene/Build/Welcome_Scene.data.br  78.10 MiB
+web/public/unity/Room_Tour/Build/Room_Tour.data.br          85.21 MiB
+web/public/unity/Ex_Stage_1/Build/Ex_Stage_1.data.br        90.60 MiB
+web/public/unity/Ex_Stage_2/Build/Ex_Stage_2.data.br        90.58 MiB
 ```
 
 GitHub may still warn because these files are above the recommended 50 MB
@@ -129,7 +131,7 @@ OPENAI_DECISION_MODEL=gpt-5.2
 
 SUPABASE_URL=https://vdbrblyfsplbsyggfwjj.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<secret>
-SUPABASE_AUDIO_BUCKET=participant-audio
+SUPABASE_AUDIO_BUCKET=speech-turn-audio
 
 WEB_ORIGIN=https://room-tour-website.onrender.com
 NODE_VERSION=24.14.1
@@ -170,6 +172,51 @@ Expected response:
 ```
 
 Then run a complete pilot pass from the root URL.
+
+## Production Data Behavior
+
+New participants are assigned conditions by the remote Supabase function
+`assign_experiment_conditions()`. The first three assignments are reserved for
+manual coverage checks:
+
+```text
+0  no_room_tour + just_ok
+1  user_lead + explanation
+2  robot_lead + confirmation_first
+```
+
+Starting with assignment index 3, participants cycle through all nine Room Tour
+x task response combinations. Because assignment happens inside one database
+counter update, near-simultaneous participants should not receive the same
+"next" assignment.
+
+Before formal launch, confirm the counter and participant table are clean:
+
+```sql
+select * from experiment_condition_assignment_counter;
+select count(*) from participants;
+```
+
+Expected launch state:
+
+```text
+next_assignment_index = 0
+participants = 0
+```
+
+Speech turns are saved in two places:
+
+```text
+speech_turns
+  transcript, decision, context, flow_step, phase, task_id, condition fields
+
+Supabase Storage bucket speech-turn-audio
+  raw participant audio files, private bucket
+```
+
+Refreshing the current experiment page preserves the participant/session
+identity but clears data for the current page only. Previously completed pages
+remain in Supabase.
 
 ## Updating Unity Builds
 

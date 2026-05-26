@@ -4,6 +4,9 @@ create table if not exists participants (
   id uuid primary key default gen_random_uuid(),
   participant_code text not null unique,
   condition_id text,
+  condition_assignment_index bigint,
+  room_tour_condition text,
+  task_response_condition text,
   created_at timestamptz not null default now(),
   completed_at timestamptz
 );
@@ -13,6 +16,9 @@ create table if not exists experiment_sessions (
   participant_id uuid not null references participants(id) on delete cascade,
   current_flow_step text not null default 'pre_experiment_questionnaire',
   status text not null default 'in_progress',
+  condition_assignment_index bigint,
+  room_tour_condition text,
+  task_response_condition text,
   user_agent text,
   started_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now(),
@@ -21,6 +27,73 @@ create table if not exists experiment_sessions (
 
 create index if not exists experiment_sessions_participant_id_idx
   on experiment_sessions(participant_id);
+
+create table if not exists experiment_condition_assignment_counter (
+  id boolean primary key default true,
+  next_assignment_index bigint not null default 0,
+  updated_at timestamptz not null default now(),
+  constraint experiment_condition_assignment_counter_singleton check (id)
+);
+
+insert into experiment_condition_assignment_counter (id, next_assignment_index)
+values (true, 0)
+on conflict (id) do nothing;
+
+create or replace function assign_experiment_conditions()
+returns table (
+  assignment_index bigint,
+  condition_id text,
+  room_tour_condition text,
+  task_response_condition text
+)
+language plpgsql
+as $$
+declare
+  selected_index bigint;
+  cycle_index integer;
+  room_index integer;
+  task_index integer;
+  room_tour_conditions text[] := array[
+    'no_room_tour',
+    'user_lead',
+    'robot_lead'
+  ];
+  task_response_conditions text[] := array[
+    'just_ok',
+    'explanation',
+    'confirmation_first'
+  ];
+begin
+  update experiment_condition_assignment_counter
+  set
+    next_assignment_index = next_assignment_index + 1,
+    updated_at = now()
+  where id = true
+  returning next_assignment_index - 1 into selected_index;
+
+  if selected_index = 0 then
+    room_tour_condition := 'no_room_tour';
+    task_response_condition := 'just_ok';
+  elsif selected_index = 1 then
+    room_tour_condition := 'user_lead';
+    task_response_condition := 'explanation';
+  elsif selected_index = 2 then
+    room_tour_condition := 'robot_lead';
+    task_response_condition := 'confirmation_first';
+  else
+    cycle_index := ((selected_index - 3) % 9)::integer;
+    room_index := floor(cycle_index / 3)::integer + 1;
+    task_index := (cycle_index % 3)::integer + 1;
+
+    room_tour_condition := room_tour_conditions[room_index];
+    task_response_condition := task_response_conditions[task_index];
+  end if;
+
+  assignment_index := selected_index;
+  condition_id := room_tour_condition || ':' || task_response_condition;
+  return next;
+end;
+$$;
 
 create table if not exists pre_experiment_questionnaire (
   id uuid primary key default gen_random_uuid(),
@@ -75,6 +148,7 @@ create table if not exists room_tour_results (
   covered_item_ids jsonb not null default '[]'::jsonb,
   target_answered_item_ids jsonb not null default '[]'::jsonb,
   target_items_status jsonb not null default '{}'::jsonb,
+  room_tour_condition text,
   metadata jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now(),
   constraint room_tour_results_session_unique unique (session_id)
@@ -96,6 +170,7 @@ create table if not exists task_phase_trial_results (
   task_index integer not null,
   task_count integer not null,
   condition text,
+  task_response_condition text,
   outcome text,
   difficulty_rating smallint,
   danger_rating smallint,
@@ -121,11 +196,50 @@ create index if not exists task_phase_trial_results_task_id_idx
 create index if not exists task_phase_trial_results_phase_idx
   on task_phase_trial_results(phase);
 
+create table if not exists speech_turns (
+  id uuid primary key default gen_random_uuid(),
+  turn_id text not null unique,
+  participant_id uuid not null references participants(id) on delete cascade,
+  participant_code text not null,
+  session_id uuid not null references experiment_sessions(id) on delete cascade,
+  phase text,
+  flow_step text,
+  task_id text,
+  task_condition text,
+  room_tour_condition text,
+  task_response_condition text,
+  target_item_id text,
+  target_item_label text,
+  transcript text not null default '',
+  decision jsonb not null default '{}'::jsonb,
+  context jsonb not null default '{}'::jsonb,
+  error_message text,
+  audio_storage_bucket text,
+  audio_storage_path text,
+  audio_original_name text,
+  audio_mime_type text,
+  audio_size_bytes integer,
+  submitted_at_server timestamptz not null default now()
+);
+
+create index if not exists speech_turns_participant_id_idx
+  on speech_turns(participant_id);
+
+create index if not exists speech_turns_session_id_idx
+  on speech_turns(session_id);
+
+create index if not exists speech_turns_flow_step_idx
+  on speech_turns(flow_step);
+
+create index if not exists speech_turns_phase_idx
+  on speech_turns(phase);
+
 create table if not exists task_phase_clarification_status (
   id uuid primary key default gen_random_uuid(),
   participant_id uuid not null references participants(id) on delete cascade,
   participant_code text not null,
   session_id uuid not null references experiment_sessions(id) on delete cascade,
+  phase text not null default '',
   task_id text not null,
   clarified boolean not null default true,
   source text,
@@ -133,7 +247,7 @@ create table if not exists task_phase_clarification_status (
   submitted_at_server timestamptz not null default now(),
   metadata jsonb not null default '{}'::jsonb,
   updated_at timestamptz not null default now(),
-  constraint task_phase_clarification_status_session_task_unique unique (session_id, task_id)
+  constraint task_phase_clarification_status_session_phase_task_unique unique (session_id, phase, task_id)
 );
 
 create index if not exists task_phase_clarification_status_participant_id_idx
@@ -141,6 +255,9 @@ create index if not exists task_phase_clarification_status_participant_id_idx
 
 create index if not exists task_phase_clarification_status_session_id_idx
   on task_phase_clarification_status(session_id);
+
+create index if not exists task_phase_clarification_status_phase_idx
+  on task_phase_clarification_status(phase);
 
 create table if not exists phase_end_questionnaire_submissions (
   id uuid primary key default gen_random_uuid(),

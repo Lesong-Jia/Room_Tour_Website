@@ -4,6 +4,9 @@ import {
   submitRoomTourCompletion
 } from "../experiment/api.js";
 import { sendUnityCommand } from "../experiment/unityBridge.js";
+import {
+  isRobotLeadCondition
+} from "../experiment/roomTourCondition.js";
 import UnityContainer from "./UnityContainer.jsx";
 import VoiceRecorder from "./VoiceRecorder.jsx";
 
@@ -14,12 +17,28 @@ const ROOM_TOUR_UNITY_COMMAND_TARGET = {
   objectName: "Progress_Manager",
   methodName: "HandleHostCommand"
 };
+const ROOM_TOUR_ITEMS = [
+  { id: 1, label: "trash can" },
+  { id: 2, label: "kitchen dining table" },
+  { id: 3, label: "coffee machine" },
+  { id: 4, label: "cutting board" },
+  { id: 5, label: "microwave" },
+  { id: 6, label: "rag" },
+  { id: 7, label: "candle" },
+  { id: 8, label: "shelf and bookshelf" }
+];
 const TARGET_ROOM_TOUR_ITEMS = [
   { id: 1, label: "trash can", commandKey: "trashCanCovered" },
   { id: 4, label: "cutting board", commandKey: "cuttingBoardCovered" },
   { id: 6, label: "rag", commandKey: "ragCovered" },
   { id: 7, label: "candle", commandKey: "candleCovered" }
 ];
+const TARGET_ROOM_TOUR_ANSWERS = {
+  1: "White trash can for recyclable trash; black trash can for non-recyclable trash.",
+  4: "Small dark cutting board is for vegetables and fruit; large light cutting board is for meat.",
+  6: "Green rag is for screens; blue rag is for tables.",
+  7: "Long thin white candle is decorative; green candle is bamboo-scented aromatherapy."
+};
 
 export default function RoomTourPage({ identity, onComplete }) {
   const [unityLoaded, setUnityLoaded] = useState(false);
@@ -35,8 +54,18 @@ export default function RoomTourPage({ identity, onComplete }) {
   const [finalCompleted, setFinalCompleted] = useState(false);
   const [feedback, setFeedback] = useState("");
   const [unityStatus, setUnityStatus] = useState("");
+  const [robotSpeaking, setRobotSpeaking] = useState(false);
+  const [showPostQuestionsCompletionHint, setShowPostQuestionsCompletionHint] =
+    useState(false);
+  const [showFreeTourCompletionHint, setShowFreeTourCompletionHint] =
+    useState(false);
+  const [robotLeadTargetQuestionsActive, setRobotLeadTargetQuestionsActive] =
+    useState(false);
   const roomTourResetKeyRef = useRef("");
   const completionSubmittedRef = useRef(false);
+  const targetQuestionSequenceStartedRef = useRef(false);
+  const targetAnswerSubmittedRef = useRef(false);
+  const roomTourCondition = identity?.roomTourCondition || "";
 
   const unityConfig = useMemo(
     () => ({
@@ -68,13 +97,42 @@ export default function RoomTourPage({ identity, onComplete }) {
         setUnityStatus("");
       }
 
+      if (
+        detail?.type === "room_tour_intro_started" ||
+        detail?.type === "room_tour_confirmation_started"
+      ) {
+        setRobotSpeaking(true);
+      }
+
+      if (detail?.type === "room_tour_condition_requested") {
+        if (roomTourCondition) {
+          sendUnityCommand({
+            type: "set_room_tour_condition",
+            condition: roomTourCondition
+          }, ROOM_TOUR_UNITY_COMMAND_TARGET);
+        }
+      }
+
       if (detail?.type === "room_tour_intro_completed") {
         setIntroCompleted(true);
-        setRoomTourPhase("free_tour");
+        if (isRobotLeadCondition(roomTourCondition)) {
+          setRobotSpeaking(true);
+          setRoomTourPhase("target_transition");
+          setRobotLeadTargetQuestionsActive(true);
+        } else {
+          setRobotSpeaking(false);
+          setRoomTourPhase("free_tour");
+        }
         setUnityStatus("");
       }
 
+      if (detail?.type === "room_tour_confirmation_completed") {
+        setRobotSpeaking(false);
+      }
+
       if (detail?.type === "room_tour_target_question_ready") {
+        setRobotSpeaking(false);
+        targetAnswerSubmittedRef.current = false;
         setCurrentTargetItemId(Number(detail.itemId) || null);
         setRoomTourPhase("target_answer");
         setFeedback("");
@@ -82,8 +140,12 @@ export default function RoomTourPage({ identity, onComplete }) {
       }
 
       if (detail?.type === "room_tour_target_questions_completed") {
+        setRobotSpeaking(false);
+        targetAnswerSubmittedRef.current = false;
         setCurrentTargetItemId(null);
         setRoomTourPhase("post_questions");
+        setRobotLeadTargetQuestionsActive(false);
+        setShowPostQuestionsCompletionHint(false);
         setFeedback("");
         setUnityStatus("");
       }
@@ -96,6 +158,27 @@ export default function RoomTourPage({ identity, onComplete }) {
           phase === "target_transition" ? "post_questions" : phase
         );
         setCurrentTargetItemId(null);
+        setRobotSpeaking(false);
+        targetAnswerSubmittedRef.current = false;
+      }
+
+      if (
+        detail?.type === "room_tour_additional_followup_ready"
+      ) {
+        setRobotSpeaking(false);
+        setRobotLeadTargetQuestionsActive(false);
+        setRoomTourPhase("additional_followup");
+        setShowPostQuestionsCompletionHint(false);
+        setFeedback("");
+      }
+
+      if (detail?.type === "room_tour_additional_followup_completed") {
+        setRobotSpeaking(false);
+      }
+
+      if (detail?.type === "room_tour_false_condition_completed") {
+        setRobotSpeaking(false);
+        void completeFalseRoomTourCondition();
       }
     }
 
@@ -104,7 +187,7 @@ export default function RoomTourPage({ identity, onComplete }) {
     return () => {
       window.removeEventListener("unity-experiment-event", handleUnityEvent);
     };
-  }, []);
+  }, [roomTourCondition]);
 
   useEffect(() => {
     if (!identity?.sessionId) {
@@ -125,6 +208,12 @@ export default function RoomTourPage({ identity, onComplete }) {
     setCurrentTargetItemId(null);
     setFinalCompleted(false);
     setFeedback("");
+    setRobotSpeaking(false);
+    setShowFreeTourCompletionHint(false);
+    setShowPostQuestionsCompletionHint(false);
+    setRobotLeadTargetQuestionsActive(false);
+    targetQuestionSequenceStartedRef.current = false;
+    targetAnswerSubmittedRef.current = false;
 
     resetRoomTourProgress({
       participantId: identity.participantId,
@@ -159,20 +248,17 @@ export default function RoomTourPage({ identity, onComplete }) {
       return;
     }
 
-    if (decision.isComplete || decision.intent === "complete_room_tour_introduction") {
-      if (roomTourPhase === "post_questions") {
-        setFeedback("");
-        await completeRoomTourSession();
-        return;
-      }
-
-      startTargetQuestionSequence(decision);
-      setFeedback("");
+    if (
+      roomTourPhase === "post_questions" ||
+      roomTourPhase === "additional_followup"
+    ) {
+      await handlePreferenceFollowupDecision(decision);
       return;
     }
 
-    if (roomTourPhase === "post_questions") {
-      handlePreferenceFollowupDecision(decision);
+    if (decision.isComplete || decision.intent === "complete_room_tour_introduction") {
+      startTargetQuestionSequence(decision);
+      setFeedback("");
       return;
     }
 
@@ -183,12 +269,14 @@ export default function RoomTourPage({ identity, onComplete }) {
     const isFirstRecordableExplanation =
       isRecordableExplanation && recordedItems.length === 0;
 
+    setRobotSpeaking(true);
     sendUnityCommand(
       getConfirmationCommand(decision, isFirstRecordableExplanation),
       ROOM_TOUR_UNITY_COMMAND_TARGET
     );
 
     if (isRecordableExplanation && decision.summary) {
+      setShowFreeTourCompletionHint(true);
       setRecordedItems((currentItems) =>
         upsertRecordedItem(currentItems, {
           id: decision.matchedItemId || `unmatched_${Date.now()}`,
@@ -196,6 +284,10 @@ export default function RoomTourPage({ identity, onComplete }) {
           matched: Boolean(decision.matchedItemId)
         })
       );
+    }
+
+    if (!isRecordableExplanation) {
+      setShowFreeTourCompletionHint(true);
     }
 
     setFeedback(decision.feedback || "");
@@ -216,10 +308,13 @@ export default function RoomTourPage({ identity, onComplete }) {
         recordedItems,
         coveredItemIds,
         targetAnsweredItemIds,
-        targetItemsStatus: getTargetItemsStatus(targetAnsweredItemIds),
+        targetItemsStatus: getRoomTourItemsStatus(coveredItemIds),
+        roomTourCondition,
         metadata: {
           roomTourPhase,
-          finalPromptCompleted: true
+          roomTourCondition,
+          finalPromptCompleted: true,
+          targetQuestionItemsStatus: getTargetQuestionItemsStatus(targetAnsweredItemIds)
         }
       });
 
@@ -236,21 +331,78 @@ export default function RoomTourPage({ identity, onComplete }) {
     }
   }
 
-  function handlePreferenceFollowupDecision(decision) {
+  async function completeFalseRoomTourCondition() {
+    if (completionSubmittedRef.current) {
+      setFinalCompleted(true);
+      return;
+    }
+
+    try {
+      await submitRoomTourCompletion({
+        participantId: identity?.participantId,
+        participantCode: identity?.participantCode,
+        sessionId: identity?.sessionId,
+        submittedAtBrowser: new Date().toISOString(),
+        recordedItems: [],
+        coveredItemIds: [],
+        targetAnsweredItemIds: [],
+        targetItemsStatus: getRoomTourItemsStatus([]),
+        roomTourCondition,
+        metadata: {
+          roomTourPhase: "false_condition",
+          roomTourCondition,
+          finalPromptCompleted: true,
+          skippedRoomTour: true
+        }
+      });
+
+      completionSubmittedRef.current = true;
+      setFinalCompleted(true);
+    } catch (error) {
+      setFeedback(
+        error.message || "Room Tour completion could not be saved. Please try again."
+      );
+    }
+  }
+
+  async function handlePreferenceFollowupDecision(decision) {
+    if (decision.isComplete || decision.intent === "complete_room_tour_introduction") {
+      if (
+        isRobotLeadCondition(roomTourCondition) &&
+        roomTourPhase === "post_questions"
+      ) {
+        setFeedback("");
+        setRobotLeadTargetQuestionsActive(false);
+        setRobotSpeaking(true);
+        setRoomTourPhase("target_transition");
+        sendUnityCommand({
+          type: "start_room_tour_additional_followup",
+          speechId: "room_tour_additional_followup_start"
+        }, ROOM_TOUR_UNITY_COMMAND_TARGET);
+        return;
+      }
+
+      setFeedback("");
+      await completeRoomTourSession();
+      return;
+    }
+
     if (decision.intent === "record_room_tour_preference") {
       const isFirstPreferenceResponse = preferenceResponseCount === 0;
 
       if (decision.summary) {
         setRecordedItems((currentItems) =>
           upsertRecordedItem(currentItems, {
-            id: `preference_${Date.now()}`,
+            id: decision.matchedItemId || `preference_${Date.now()}`,
             summary: decision.summary,
-            matched: true
+            matched: Boolean(decision.matchedItemId)
           })
         );
       }
 
       setPreferenceResponseCount((currentCount) => currentCount + 1);
+      setShowPostQuestionsCompletionHint(true);
+      setRobotSpeaking(true);
       sendUnityCommand({
         type: isFirstPreferenceResponse
           ? "play_first_preference_confirmation"
@@ -263,6 +415,8 @@ export default function RoomTourPage({ identity, onComplete }) {
       return;
     }
 
+    setShowPostQuestionsCompletionHint(true);
+    setRobotSpeaking(true);
     sendUnityCommand({
       type: "play_preference_unrelated_confirmation",
       speechId: "room_tour_preference_unrelated_confirmation"
@@ -271,9 +425,28 @@ export default function RoomTourPage({ identity, onComplete }) {
   }
 
   function handleTargetQuestionDecision(decision) {
+    if (targetAnswerSubmittedRef.current) {
+      return;
+    }
+
     const targetItemId = Number(decision.targetItemId || currentTargetItemId);
 
     if (decision.approved || decision.intent === "answer_room_tour_target_question") {
+      targetAnswerSubmittedRef.current = true;
+      const nextTargetAnsweredItemIds = Array.from(
+        new Set([...targetAnsweredItemIds, targetItemId])
+      ).sort((a, b) => a - b);
+      const hasAnsweredAllTargetQuestions = TARGET_ROOM_TOUR_ITEMS.every((item) =>
+        nextTargetAnsweredItemIds.includes(item.id)
+      );
+
+      if (
+        isRobotLeadCondition(roomTourCondition) &&
+        hasAnsweredAllTargetQuestions
+      ) {
+        setRobotLeadTargetQuestionsActive(false);
+      }
+
       if (decision.summary) {
         setRecordedItems((currentItems) =>
           upsertRecordedItem(currentItems, {
@@ -284,9 +457,7 @@ export default function RoomTourPage({ identity, onComplete }) {
         );
       }
 
-      setTargetAnsweredItemIds((currentIds) =>
-        Array.from(new Set([...currentIds, targetItemId])).sort((a, b) => a - b)
-      );
+      setTargetAnsweredItemIds(nextTargetAnsweredItemIds);
       setCurrentTargetItemId(null);
       setRoomTourPhase("target_transition");
       setFeedback("");
@@ -298,6 +469,7 @@ export default function RoomTourPage({ identity, onComplete }) {
       return;
     }
 
+    targetAnswerSubmittedRef.current = true;
     setCurrentTargetItemId(targetItemId);
     setRoomTourPhase("target_transition");
     setFeedback(decision.feedback || "");
@@ -309,6 +481,12 @@ export default function RoomTourPage({ identity, onComplete }) {
   }
 
   function startTargetQuestionSequence(decision) {
+    if (targetQuestionSequenceStartedRef.current) {
+      return;
+    }
+
+    targetQuestionSequenceStartedRef.current = true;
+
     const nextCoveredItemIds = normalizeIdList(
       decision.coveredItemIds?.length ? decision.coveredItemIds : coveredItemIds
     );
@@ -349,7 +527,8 @@ export default function RoomTourPage({ identity, onComplete }) {
       flowStep:
         roomTourPhase === "target_answer"
           ? "room_tour_target_answer"
-          : roomTourPhase === "post_questions"
+          : roomTourPhase === "post_questions" ||
+              roomTourPhase === "additional_followup"
             ? "room_tour_preference_followup"
             : "room_tour_explanation",
       targetItemId: currentTargetItemId || "",
@@ -359,11 +538,12 @@ export default function RoomTourPage({ identity, onComplete }) {
   );
   const voicePaused =
     finalCompleted ||
+    robotSpeaking ||
     roomTourPhase === "target_transition" ||
     (roomTourPhase === "target_answer" && !currentTargetItemId);
   const voicePausedMessage =
-    roomTourPhase === "target_transition"
-      ? "Please wait while the robot moves to the next question."
+    robotSpeaking || roomTourPhase === "target_transition"
+      ? "Please wait while the robot is speaking."
       : "";
 
   if (finalCompleted) {
@@ -399,10 +579,21 @@ export default function RoomTourPage({ identity, onComplete }) {
         sceneOverlay={
           introCompleted && !finalCompleted ? (
             <section className="room-tour-record-panel room-tour-record-overlay" aria-live="polite">
-              <h2>
-                Walk to any object you think the robot should know about and
-                introduce it using voice input. The robot has currently recorded:
-              </h2>
+              {isRobotLeadCondition(roomTourCondition) &&
+              robotLeadTargetQuestionsActive ? (
+                <h2>
+                  Listen to the robot's question and answer using voice input.
+                  The robot has currently recorded:
+                </h2>
+              ) : (
+                <h2>
+                  Walk to any object you think the robot should know about and
+                  introduce one object or detail at a time using voice input.
+                  After each one, stop speaking by clicking the Stop Input and
+                  Send button so it can be recorded before continuing. The
+                  robot has currently recorded:
+                </h2>
+              )}
               <p>
                 {recordedItems.length > 0
                   ? recordedItems
@@ -456,7 +647,13 @@ export default function RoomTourPage({ identity, onComplete }) {
               disabledMessage={voicePausedMessage}
               feedback={feedback}
               buttonHint={
-                roomTourPhase === "free_tour" && recordedItems.length > 0
+                roomTourPhase === "target_answer" && currentTargetItemId
+                  ? `Answer: ${getTargetQuestionAnswer(currentTargetItemId)}`
+                  : (roomTourPhase === "free_tour" &&
+                  (recordedItems.length > 0 || showFreeTourCompletionHint)) ||
+                ((roomTourPhase === "post_questions" ||
+                  roomTourPhase === "additional_followup") &&
+                  showPostQuestionsCompletionHint)
                   ? `If you have finished introducing the room, you can say, "That's everything I wanted to introduce."`
                   : ""
               }
@@ -483,7 +680,20 @@ function getTargetItemLabel(itemId) {
   return TARGET_ROOM_TOUR_ITEMS.find((item) => item.id === Number(itemId))?.label || "";
 }
 
-function getTargetItemsStatus(answeredItemIds) {
+function getTargetQuestionAnswer(itemId) {
+  return TARGET_ROOM_TOUR_ANSWERS[Number(itemId)] || "";
+}
+
+function getRoomTourItemsStatus(coveredItemIds) {
+  const coveredIds = new Set(normalizeIdList(coveredItemIds));
+
+  return ROOM_TOUR_ITEMS.reduce((status, item) => ({
+    ...status,
+    [item.label]: coveredIds.has(item.id)
+  }), {});
+}
+
+function getTargetQuestionItemsStatus(answeredItemIds) {
   const answeredIds = new Set(normalizeIdList(answeredItemIds));
 
   return TARGET_ROOM_TOUR_ITEMS.reduce((status, item) => ({
@@ -542,7 +752,9 @@ function withIdentity(context, identity) {
     ...context,
     participantId: identity.participantId,
     participantCode: identity.participantCode,
-    sessionId: identity.sessionId
+    sessionId: identity.sessionId,
+    roomTourCondition: identity.roomTourCondition,
+    taskResponseCondition: identity.taskResponseCondition
   };
 }
 

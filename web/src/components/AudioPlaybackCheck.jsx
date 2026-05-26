@@ -30,10 +30,6 @@ export default function AudioPlaybackCheck({ onPassed }) {
     setFeedback("");
   }
 
-  function stopKeyboardEventPropagation(event) {
-    event.stopPropagation();
-  }
-
   function handleSubmit(event) {
     event.preventDefault();
 
@@ -67,9 +63,6 @@ export default function AudioPlaybackCheck({ onPassed }) {
             type="text"
             value={answer}
             onChange={handleAnswerChange}
-            onKeyDownCapture={stopKeyboardEventPropagation}
-            onKeyUpCapture={stopKeyboardEventPropagation}
-            onKeyPressCapture={stopKeyboardEventPropagation}
             autoComplete="off"
             inputMode="text"
           />

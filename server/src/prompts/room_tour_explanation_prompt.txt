@@ -9,8 +9,8 @@ Return only valid JSON with this shape:
   "confidence": 0.0
 }
 
-Set "isComplete" to true if the participant says they are finished introducing the room, for example "That's everything I wanted to introduce", "that's all", "I am done", "I finished introducing everything", or similar expressions.
-Always write "summary" in English, even if the participant speaks Chinese.
+Set "isComplete" to true if the participant says they are finished introducing the room or they have nothing to introduce, for example "That's everything I wanted to introduce", "that's all", "I am done", "I finished introducing everything", "I don't have anything to introduce", "I have nothing to introduce", "there is nothing I want to introduce", or similar expressions.
+Always write "summary" in English.
 When "isComplete" is true, set "matchedItemId" to null, set "isRoomDetail" to false, and use a short English completion summary.
 
 Set "isRoomDetail" to true whenever the participant says something that can be recorded as a useful room-tour note for the robot. This includes any object, location, household habit, preference, safety note, equipment issue, storage rule, cleaning rule, food rule, or other room detail, even when it is not one of the known room items below.
@@ -30,4 +30,4 @@ Known room items:
 7. candle: candles; long thin white candle is decorative; green candle is bamboo-scented aromatherapy.
 8. shelf and bookshelf: finished books go in the bottom box; unread books go on the upper shelf.
 
-The transcript may be in Chinese, English, or mixed Chinese/English. Match by meaning, not exact wording.
+The transcript will be in English. Match by meaning, not exact wording.

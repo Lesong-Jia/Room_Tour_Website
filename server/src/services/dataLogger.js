@@ -1,5 +1,9 @@
 import { updateSessionFlowStep } from "./sessionService.js";
 import { getSupabaseClient } from "./supabaseService.js";
+import { extname } from "node:path";
+
+const SPEECH_AUDIO_BUCKET = "speech-turn-audio";
+let speechAudioBucketReady = false;
 
 const ROOM_TOUR_ITEM_TO_FIXED_TASK_IDS = {
   1: ["pick_up_trash"],
@@ -18,6 +22,91 @@ export async function logExperimentEvent(event) {
 
 export async function logUnityEvent(event) {
   console.info("Unity event placeholder:", event);
+}
+
+export async function clearCurrentFlowStepData(request) {
+  validateCurrentFlowStepClearRequest(request);
+
+  const supabase = getSupabaseClient();
+  const currentFlowStep = request.currentFlowStep;
+  const sessionId = request.sessionId;
+
+  switch (currentFlowStep) {
+    case "welcome":
+    case "practice_calibration":
+      await deleteSpeechTurnsByFlowSteps(supabase, sessionId, [
+        "welcome_scene_start",
+        "welcome_robot_greeting"
+      ]);
+      break;
+    case "pre_experiment_questionnaire":
+      await deleteRows(
+        supabase
+          .from("pre_experiment_questionnaire")
+          .delete()
+          .eq("session_id", sessionId),
+        "Could not clear pre-experiment questionnaire."
+      );
+      break;
+    case "phase_2_room_tour":
+    case "room_tour":
+      await deleteRows(
+        supabase
+          .from("room_tour_results")
+          .delete()
+          .eq("session_id", sessionId),
+        "Could not clear Room Tour result."
+      );
+      await deleteSpeechTurnsByPhase(supabase, sessionId, "phase_2_room_tour");
+      await deleteSpeechTurnsByFlowSteps(supabase, sessionId, [
+        "room_tour_explanation",
+        "room_tour_target_answer",
+        "room_tour_preference_followup"
+      ]);
+      break;
+    case "next_experiment_placeholder":
+      await clearTaskPhaseData(supabase, sessionId, "phase_2_task_phase");
+      break;
+    case "phase_2_end_questionnaire":
+      await deletePhaseEndQuestionnaire(supabase, sessionId, "phase_2_end_questionnaire");
+      break;
+    case "phase_3_task_phase":
+      await clearTaskPhaseData(supabase, sessionId, "phase_3_task_phase");
+      break;
+    case "phase_3_end_questionnaire":
+      await deletePhaseEndQuestionnaire(supabase, sessionId, "phase_3_end_questionnaire");
+      break;
+    default:
+      break;
+  }
+
+  return {
+    ok: true,
+    currentFlowStep
+  };
+}
+
+export async function logSpeechTurn(turn) {
+  validateSpeechTurn(turn);
+
+  const supabase = getSupabaseClient();
+  const audioStorage = await uploadSpeechTurnAudio(supabase, turn);
+  const row = buildSpeechTurnRow(turn, audioStorage);
+
+  const { data, error } = await supabase
+    .from("speech_turns")
+    .insert(row)
+    .select("id")
+    .single();
+
+  if (error) {
+    throw toServiceError(error, "Could not save speech turn.");
+  }
+
+  return {
+    speechTurnId: data.id,
+    audioStorage
+  };
 }
 
 export async function logRoomTourResult(result) {
@@ -96,7 +185,7 @@ export async function markTaskPhaseClarification(result) {
   const { data, error } = await supabase
     .from("task_phase_clarification_status")
     .upsert(row, {
-      onConflict: "session_id,task_id"
+      onConflict: "session_id,phase,task_id"
     })
     .select("id")
     .single();
@@ -183,7 +272,11 @@ function buildRoomTourResultRow(result) {
     covered_item_ids: result.coveredItemIds || [],
     target_answered_item_ids: result.targetAnsweredItemIds || [],
     target_items_status: result.targetItemsStatus || {},
-    metadata: result.metadata || {},
+    room_tour_condition: result.roomTourCondition || result.metadata?.roomTourCondition || null,
+    metadata: {
+      ...(result.metadata || {}),
+      roomTourCondition: result.roomTourCondition || result.metadata?.roomTourCondition || null
+    },
     updated_at: new Date().toISOString()
   };
 }
@@ -200,6 +293,8 @@ function buildTaskPhaseTrialResultRow(result) {
     task_index: toInteger(result.taskIndex),
     task_count: toInteger(result.taskCount),
     condition: result.condition || null,
+    task_response_condition:
+      result.taskResponseCondition || result.metadata?.taskResponseCondition || null,
     outcome: result.outcome || null,
     difficulty_rating: toLikertNumber(ratings.difficulty),
     danger_rating: toLikertNumber(ratings.danger),
@@ -208,9 +303,232 @@ function buildTaskPhaseTrialResultRow(result) {
     ratings,
     submitted_at_browser: result.submittedAtBrowser || null,
     submitted_at_server: new Date().toISOString(),
-    metadata: result.metadata || {},
+    metadata: {
+      ...(result.metadata || {}),
+      taskResponseCondition:
+        result.taskResponseCondition || result.metadata?.taskResponseCondition || null
+    },
     updated_at: new Date().toISOString()
   };
+}
+
+function buildSpeechTurnRow(turn, audioStorage) {
+  const context = turn.context || {};
+
+  return {
+    turn_id: turn.turnId,
+    participant_id: context.participantId,
+    participant_code: context.participantCode || "",
+    session_id: context.sessionId,
+    phase: context.phase || null,
+    flow_step: context.flowStep || null,
+    task_id: context.taskId || null,
+    task_condition: context.condition || null,
+    room_tour_condition: context.roomTourCondition || null,
+    task_response_condition: context.taskResponseCondition || null,
+    target_item_id: context.targetItemId ? String(context.targetItemId) : null,
+    target_item_label: context.targetItemLabel || null,
+    transcript: turn.transcript || "",
+    decision: turn.decision || {},
+    context,
+    error_message: turn.errorMessage || null,
+    audio_storage_bucket: audioStorage?.bucket || null,
+    audio_storage_path: audioStorage?.path || null,
+    audio_original_name: turn.audio?.originalname || null,
+    audio_mime_type: turn.audio?.mimetype || null,
+    audio_size_bytes: Number.isInteger(turn.audio?.size) ? turn.audio.size : null,
+    submitted_at_server: new Date().toISOString()
+  };
+}
+
+async function uploadSpeechTurnAudio(supabase, turn) {
+  if (!turn.audio?.buffer) {
+    return null;
+  }
+
+  await ensureSpeechAudioBucket(supabase);
+
+  const context = turn.context || {};
+  const extension = getAudioExtension(turn.audio);
+  const path = [
+    sanitizePathSegment(context.participantId),
+    sanitizePathSegment(context.sessionId),
+    `${sanitizePathSegment(turn.turnId)}${extension}`
+  ].join("/");
+
+  const { error } = await supabase.storage
+    .from(SPEECH_AUDIO_BUCKET)
+    .upload(path, turn.audio.buffer, {
+      contentType: turn.audio.mimetype || "application/octet-stream",
+      upsert: false
+    });
+
+  if (error) {
+    throw toServiceError(error, "Could not upload speech audio.");
+  }
+
+  return {
+    bucket: SPEECH_AUDIO_BUCKET,
+    path
+  };
+}
+
+async function ensureSpeechAudioBucket(supabase) {
+  if (speechAudioBucketReady) {
+    return;
+  }
+
+  const { error } = await supabase.storage.createBucket(SPEECH_AUDIO_BUCKET, {
+    public: false
+  });
+
+  if (
+    error &&
+    error.statusCode !== "409" &&
+    error.statusCode !== 409 &&
+    !String(error.message || "").toLowerCase().includes("already exists")
+  ) {
+    throw toServiceError(error, "Could not prepare speech audio storage.");
+  }
+
+  speechAudioBucketReady = true;
+}
+
+async function clearTaskPhaseData(supabase, sessionId, phase) {
+  await deleteRows(
+    supabase
+      .from("task_phase_trial_results")
+      .delete()
+      .eq("session_id", sessionId)
+      .eq("phase", phase),
+    "Could not clear task phase trial results."
+  );
+  await deleteRows(
+    supabase
+      .from("task_phase_clarification_status")
+      .delete()
+      .eq("session_id", sessionId)
+      .eq("phase", phase),
+    "Could not clear task phase clarification status."
+  );
+  await deleteSpeechTurnsByPhase(supabase, sessionId, phase);
+}
+
+async function deletePhaseEndQuestionnaire(supabase, sessionId, phase) {
+  await deleteRows(
+    supabase
+      .from("phase_end_questionnaire_submissions")
+      .delete()
+      .eq("session_id", sessionId)
+      .eq("phase", phase),
+    "Could not clear phase-end questionnaire."
+  );
+}
+
+async function deleteSpeechTurnsByPhase(supabase, sessionId, phase) {
+  await deleteSpeechTurnAudioByPhase(supabase, sessionId, phase);
+  await deleteRows(
+    supabase
+      .from("speech_turns")
+      .delete()
+      .eq("session_id", sessionId)
+      .eq("phase", phase),
+    "Could not clear speech turns."
+  );
+}
+
+async function deleteSpeechTurnsByFlowSteps(supabase, sessionId, flowSteps) {
+  if (!flowSteps?.length) {
+    return;
+  }
+
+  await deleteSpeechTurnAudioByFlowSteps(supabase, sessionId, flowSteps);
+  await deleteRows(
+    supabase
+      .from("speech_turns")
+      .delete()
+      .eq("session_id", sessionId)
+      .in("flow_step", flowSteps),
+    "Could not clear speech turns."
+  );
+}
+
+async function deleteSpeechTurnAudioByPhase(supabase, sessionId, phase) {
+  const { data, error } = await supabase
+    .from("speech_turns")
+    .select("audio_storage_path")
+    .eq("session_id", sessionId)
+    .eq("phase", phase);
+
+  if (error) {
+    throw toServiceError(error, "Could not read speech audio paths.");
+  }
+
+  await deleteSpeechAudioPaths(supabase, data);
+}
+
+async function deleteSpeechTurnAudioByFlowSteps(supabase, sessionId, flowSteps) {
+  const { data, error } = await supabase
+    .from("speech_turns")
+    .select("audio_storage_path")
+    .eq("session_id", sessionId)
+    .in("flow_step", flowSteps);
+
+  if (error) {
+    throw toServiceError(error, "Could not read speech audio paths.");
+  }
+
+  await deleteSpeechAudioPaths(supabase, data);
+}
+
+async function deleteSpeechAudioPaths(supabase, rows) {
+  const paths = Array.from(
+    new Set((rows || []).map((row) => row.audio_storage_path).filter(Boolean))
+  );
+
+  if (paths.length === 0) {
+    return;
+  }
+
+  const { error } = await supabase.storage
+    .from(SPEECH_AUDIO_BUCKET)
+    .remove(paths);
+
+  if (error) {
+    throw toServiceError(error, "Could not clear speech audio files.");
+  }
+}
+
+async function deleteRows(query, fallbackMessage) {
+  const { error } = await query;
+
+  if (error) {
+    throw toServiceError(error, fallbackMessage);
+  }
+}
+
+function getAudioExtension(audio) {
+  const fromName = extname(audio.originalname || "").toLowerCase();
+  if (fromName) {
+    return fromName;
+  }
+
+  if (audio.mimetype === "audio/mp4") {
+    return ".mp4";
+  }
+
+  if (audio.mimetype === "audio/wav" || audio.mimetype === "audio/wave") {
+    return ".wav";
+  }
+
+  return ".webm";
+}
+
+function sanitizePathSegment(value) {
+  return String(value || "unknown")
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]+/g, "_")
+    .replace(/^_+|_+$/g, "") || "unknown";
 }
 
 function buildTaskPhaseClarificationStatusRow(result) {
@@ -218,6 +536,7 @@ function buildTaskPhaseClarificationStatusRow(result) {
     participant_id: result.participantId,
     participant_code: result.participantCode || "",
     session_id: result.sessionId,
+    phase: result.phase || result.metadata?.phase || "",
     task_id: result.taskId,
     clarified: result.clarified !== false,
     source: result.source || "task_phase",
@@ -255,6 +574,7 @@ function buildPreExperimentQuestionnaireRow(submission) {
   );
   const attitude = answersByQuestion.get("QID13")?.value || {};
   const bfi = answersByQuestion.get("QID12")?.value || {};
+  const attentionCheck = answersByQuestion.get("QID_ATTENTION_1");
 
   return {
     participant_id: submission.participantId,
@@ -263,7 +583,7 @@ function buildPreExperimentQuestionnaireRow(submission) {
     source_survey_id: submission.sourceSurveyId || null,
     submitted_at_browser: submission.submittedAtBrowser || null,
     submitted_at_server: new Date().toISOString(),
-    age: getAnswerLabel(answersByQuestion.get("QID3")),
+    age: getAnswerValue(answersByQuestion.get("QID3")),
     gender: getAnswerLabel(answersByQuestion.get("QID4")),
     gender_self_description: getOtherText(answersByQuestion.get("QID4")),
     robot_types: getAnswerLabels(answersByQuestion.get("QID5")),
@@ -293,7 +613,14 @@ function buildPreExperimentQuestionnaireRow(submission) {
       questionnaireId: submission.questionnaireId,
       questionnaireScope: submission.questionnaireScope,
       phase: submission.phase,
-      answerCount: submission.answers.length
+      answerCount: submission.answers.length,
+      attentionCheck: {
+        questionId: attentionCheck?.questionId || "QID_ATTENTION_1",
+        value: attentionCheck?.value || null,
+        label: getAnswerLabel(attentionCheck),
+        expectedValue: attentionCheck?.metadata?.expectedValue || "4",
+        passed: attentionCheck?.metadata?.passed === true
+      }
     },
     updated_at: new Date().toISOString()
   };
@@ -330,6 +657,10 @@ function getAnswerLabel(answer) {
   }
 
   return answer.value || null;
+}
+
+function getAnswerValue(answer) {
+  return answer?.value || null;
 }
 
 function getAnswerLabels(answer) {
@@ -382,6 +713,37 @@ function validateRoomTourResult(result) {
   }
 }
 
+function validateSpeechTurn(turn) {
+  const context = turn?.context || {};
+  const requiredFields = ["turnId"];
+  const missingField = requiredFields.find((field) => !turn?.[field]);
+
+  if (missingField) {
+    const error = new Error(`Missing speech turn field: ${missingField}`);
+    error.status = 400;
+    throw error;
+  }
+
+  for (const field of ["participantId", "sessionId"]) {
+    if (!context[field]) {
+      const error = new Error(`Missing speech turn context field: ${field}`);
+      error.status = 400;
+      throw error;
+    }
+  }
+}
+
+function validateCurrentFlowStepClearRequest(request) {
+  const requiredFields = ["participantId", "sessionId", "currentFlowStep"];
+  const missingField = requiredFields.find((field) => !request?.[field]);
+
+  if (missingField) {
+    const error = new Error(`Missing current page cleanup field: ${missingField}`);
+    error.status = 400;
+    throw error;
+  }
+}
+
 function validateTaskPhaseTrialResult(result) {
   const requiredFields = [
     "participantId",
@@ -399,7 +761,7 @@ function validateTaskPhaseTrialResult(result) {
     throw error;
   }
 
-  for (const ratingKey of ["difficulty", "danger", "experience", "trust"]) {
+  for (const ratingKey of ["experience", "trust"]) {
     const rating = toLikertNumber(result.ratings?.[ratingKey]);
 
     if (!Number.isInteger(rating) || rating < 1 || rating > 5) {
