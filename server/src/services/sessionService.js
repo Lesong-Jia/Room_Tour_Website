@@ -145,17 +145,39 @@ export async function updateSessionFlowStep({
   }
 
   const supabase = getSupabaseClient();
+  const now = new Date().toISOString();
+  const isCompletionStep = currentFlowStep === "completion";
+  const sessionUpdate = {
+    current_flow_step: currentFlowStep,
+    last_seen_at: now
+  };
+
+  if (isCompletionStep) {
+    sessionUpdate.status = "completed";
+    sessionUpdate.completed_at = now;
+  }
+
   const { error } = await supabase
     .from("experiment_sessions")
-    .update({
-      current_flow_step: currentFlowStep,
-      last_seen_at: new Date().toISOString()
-    })
+    .update(sessionUpdate)
     .eq("id", sessionId)
     .eq("participant_id", participantId);
 
   if (error) {
     throw toServiceError(error, "Could not update experiment session.");
+  }
+
+  if (isCompletionStep) {
+    const { error: participantError } = await supabase
+      .from("participants")
+      .update({
+        completed_at: now
+      })
+      .eq("id", participantId);
+
+    if (participantError) {
+      throw toServiceError(participantError, "Could not mark participant complete.");
+    }
   }
 }
 
