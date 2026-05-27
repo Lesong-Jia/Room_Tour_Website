@@ -63,24 +63,34 @@ declare
     'explanation',
     'confirmation_first'
   ];
-  topup_room_tour_conditions text[] := array[
+  first_topup_room_tour_conditions text[] := array[
     'no_room_tour',
     'no_room_tour',
     'user_lead',
     'user_lead',
     'user_lead',
     'robot_lead',
+    'robot_lead'
+  ];
+  first_topup_task_response_conditions text[] := array[
+    'just_ok',
+    'explanation',
+    'explanation',
+    'confirmation_first',
+    'confirmation_first',
+    'just_ok',
+    'just_ok'
+  ];
+  remaining_topup_room_tour_conditions text[] := array[
+    'no_room_tour',
+    'user_lead',
     'robot_lead',
     'robot_lead',
     'robot_lead'
   ];
-  topup_task_response_conditions text[] := array[
-    'just_ok',
-    'explanation',
+  remaining_topup_task_response_conditions text[] := array[
     'explanation',
     'confirmation_first',
-    'confirmation_first',
-    'just_ok',
     'just_ok',
     'explanation',
     'confirmation_first'
@@ -102,10 +112,14 @@ begin
   elsif selected_index = 2 then
     room_tour_condition := 'robot_lead';
     task_response_condition := 'confirmation_first';
-  elsif selected_index between 21 and 29 then
+  elsif selected_index between 21 and 27 then
     cycle_index := (selected_index - 21)::integer + 1;
-    room_tour_condition := topup_room_tour_conditions[cycle_index];
-    task_response_condition := topup_task_response_conditions[cycle_index];
+    room_tour_condition := first_topup_room_tour_conditions[cycle_index];
+    task_response_condition := first_topup_task_response_conditions[cycle_index];
+  elsif selected_index between 28 and 32 then
+    cycle_index := (selected_index - 28)::integer + 1;
+    room_tour_condition := remaining_topup_room_tour_conditions[cycle_index];
+    task_response_condition := remaining_topup_task_response_conditions[cycle_index];
   else
     cycle_index := ((selected_index - 3) % 9)::integer;
     room_index := floor(cycle_index / 3)::integer + 1;

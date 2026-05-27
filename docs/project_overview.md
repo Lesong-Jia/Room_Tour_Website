@@ -81,8 +81,9 @@ assignment 0: no_room_tour + just_ok
 assignment 1: user_lead + explanation
 assignment 2: robot_lead + confirmation_first
 assignment 3+: all 9 combinations in repeating order
-assignment 21-29: targeted top-up sequence for the first 18 formal completions
-assignment 30+: all 9 combinations in repeating order
+assignment 21-27: first targeted top-up sequence
+assignment 28-32: remaining under-filled condition top-up sequence
+assignment 33+: all 9 combinations in repeating order
 ```
 
 The assignment counter lives in `experiment_condition_assignment_counter`.

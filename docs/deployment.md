@@ -186,10 +186,8 @@ manual coverage checks:
 ```
 
 Starting with assignment index 3, participants usually cycle through all nine
-Room Tour x task response combinations. Assignment indices 21-29 are a formal
-collection top-up sequence designed to bring the first 18 completed formal
-participants, excluding the three manual checks above, toward two completed
-participants per condition:
+Room Tour x task response combinations. Assignment indices 21-27 were a formal
+collection top-up sequence:
 
 ```text
 21  no_room_tour + just_ok
@@ -199,11 +197,20 @@ participants per condition:
 25  user_lead + confirmation_first
 26  robot_lead + just_ok
 27  robot_lead + just_ok
-28  robot_lead + explanation
-29  robot_lead + confirmation_first
 ```
 
-After assignment index 29, participants return to the standard nine-condition
+Assignment indices 28-32 prioritize the five remaining under-filled conditions
+needed to reach two completed formal participants per condition:
+
+```text
+28  no_room_tour + explanation
+29  user_lead + confirmation_first
+30  robot_lead + just_ok
+31  robot_lead + explanation
+32  robot_lead + confirmation_first
+```
+
+After assignment index 32, participants return to the standard nine-condition
 cycle. Because assignment happens inside one database counter update,
 near-simultaneous participants should not receive the same "next" assignment.
 
