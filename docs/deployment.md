@@ -211,7 +211,11 @@ needed to reach two completed formal participants per condition:
 33  robot_lead + just_ok
 ```
 
-After assignment index 33, participants return to the standard nine-condition
+Assignment indices 34-38 prioritize additional `robot_lead +
+confirmation_first` participants because this condition remained under-filled
+after several incomplete starts.
+
+After assignment index 38, participants return to the standard nine-condition
 cycle. Because assignment happens inside one database counter update,
 near-simultaneous participants should not receive the same "next" assignment.
 

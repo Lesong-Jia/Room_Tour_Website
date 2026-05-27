@@ -122,6 +122,9 @@ begin
     cycle_index := (selected_index - 28)::integer + 1;
     room_tour_condition := remaining_topup_room_tour_conditions[cycle_index];
     task_response_condition := remaining_topup_task_response_conditions[cycle_index];
+  elsif selected_index between 34 and 38 then
+    room_tour_condition := 'robot_lead';
+    task_response_condition := 'confirmation_first';
   else
     cycle_index := ((selected_index - 3) % 9)::integer;
     room_index := floor(cycle_index / 3)::integer + 1;
