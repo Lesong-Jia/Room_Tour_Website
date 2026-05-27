@@ -185,10 +185,27 @@ manual coverage checks:
 2  robot_lead + confirmation_first
 ```
 
-Starting with assignment index 3, participants cycle through all nine Room Tour
-x task response combinations. Because assignment happens inside one database
-counter update, near-simultaneous participants should not receive the same
-"next" assignment.
+Starting with assignment index 3, participants usually cycle through all nine
+Room Tour x task response combinations. Assignment indices 21-29 are a formal
+collection top-up sequence designed to bring the first 18 completed formal
+participants, excluding the three manual checks above, toward two completed
+participants per condition:
+
+```text
+21  no_room_tour + just_ok
+22  no_room_tour + explanation
+23  user_lead + explanation
+24  user_lead + confirmation_first
+25  user_lead + confirmation_first
+26  robot_lead + just_ok
+27  robot_lead + just_ok
+28  robot_lead + explanation
+29  robot_lead + confirmation_first
+```
+
+After assignment index 29, participants return to the standard nine-condition
+cycle. Because assignment happens inside one database counter update,
+near-simultaneous participants should not receive the same "next" assignment.
 
 Before formal launch, confirm the counter and participant table are clean:
 
