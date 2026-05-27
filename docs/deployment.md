@@ -199,7 +199,7 @@ collection top-up sequence:
 27  robot_lead + just_ok
 ```
 
-Assignment indices 28-32 prioritize the five remaining under-filled conditions
+Assignment indices 28-33 prioritize the remaining under-filled conditions
 needed to reach two completed formal participants per condition:
 
 ```text
@@ -208,9 +208,10 @@ needed to reach two completed formal participants per condition:
 30  robot_lead + just_ok
 31  robot_lead + explanation
 32  robot_lead + confirmation_first
+33  robot_lead + just_ok
 ```
 
-After assignment index 32, participants return to the standard nine-condition
+After assignment index 33, participants return to the standard nine-condition
 cycle. Because assignment happens inside one database counter update,
 near-simultaneous participants should not receive the same "next" assignment.
 

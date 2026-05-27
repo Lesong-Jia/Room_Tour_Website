@@ -86,6 +86,7 @@ declare
     'user_lead',
     'robot_lead',
     'robot_lead',
+    'robot_lead',
     'robot_lead'
   ];
   remaining_topup_task_response_conditions text[] := array[
@@ -93,7 +94,8 @@ declare
     'confirmation_first',
     'just_ok',
     'explanation',
-    'confirmation_first'
+    'confirmation_first',
+    'just_ok'
   ];
 begin
   update experiment_condition_assignment_counter
@@ -116,7 +118,7 @@ begin
     cycle_index := (selected_index - 21)::integer + 1;
     room_tour_condition := first_topup_room_tour_conditions[cycle_index];
     task_response_condition := first_topup_task_response_conditions[cycle_index];
-  elsif selected_index between 28 and 32 then
+  elsif selected_index between 28 and 33 then
     cycle_index := (selected_index - 28)::integer + 1;
     room_tour_condition := remaining_topup_room_tour_conditions[cycle_index];
     task_response_condition := remaining_topup_task_response_conditions[cycle_index];
