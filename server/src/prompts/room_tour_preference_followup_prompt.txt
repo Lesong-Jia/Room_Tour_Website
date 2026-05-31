@@ -6,20 +6,24 @@ Return only valid JSON with this shape:
 {
   "summary": "short English label, 2 to 8 words",
   "matchedItemId": 1,
+  "matchedItemIds": [1, 3],
   "isRelevant": true,
   "isComplete": false,
   "confidence": 0.0
 }
 
 Set "isComplete" to true if the participant says they have nothing else to add or they are finished, for example "nothing else", "that's all", "I have no other preferences", "I don't have anything else to say", or similar expressions.
-When "isComplete" is true, set "matchedItemId" to null, set "isRelevant" to false, and use a short English completion summary.
+When the transcript only says the participant has nothing else to add, set "isComplete" to true, set "matchedItemId" to null, set "matchedItemIds" to [], set "isRelevant" to false, and use a short English completion summary.
+If the participant gives useful room details and also says they are finished in the same transcript, keep the matching item ids, set "isRelevant" to true, and set "isComplete" to true.
 
 Set "isRelevant" to true if the participant shares any meaningful room-tour preference, habit, routine, personal detail, object usage, spatial preference, or additional information about the room. Be broad and lenient.
 
 Set "isRelevant" to false if the transcript is nonsense, empty, unrelated small talk, random words, a microphone test, or clearly not an answer to the room-tour follow-up.
 
-Set "matchedItemId" to one of 1 through 8 if the participant's answer clearly mentions or clarifies one of the known room items below.
-Set "matchedItemId" to null if the answer is relevant but does not clearly match one of them.
+Set "matchedItemIds" to every known room item id from 1 through 8 that the participant clearly mentions or clarifies.
+If the participant mentions several known room items in one answer, include all of them in "matchedItemIds".
+Set "matchedItemId" to the first id in "matchedItemIds" for backward compatibility, or null when "matchedItemIds" is empty.
+Set "matchedItemIds" to [] if the answer is relevant but does not clearly match any known room item.
 
 Known room items:
 1. trash can: white trash can for recyclable trash; black trash can for non-recyclable trash.

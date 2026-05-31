@@ -257,7 +257,19 @@ export default function RoomTourPage({ identity, onComplete }) {
     }
 
     if (decision.isComplete || decision.intent === "complete_room_tour_introduction") {
-      startTargetQuestionSequence(decision);
+      const nextState = getRoomTourDecisionState({
+        recordedItems,
+        coveredItemIds,
+        targetAnsweredItemIds
+      }, decision, "unmatched");
+      setRecordedItems(nextState.recordedItems);
+      setCoveredItemIds(nextState.coveredItemIds);
+      setTargetAnsweredItemIds(nextState.targetAnsweredItemIds);
+      startTargetQuestionSequence({
+        ...decision,
+        coveredItemIds: nextState.coveredItemIds,
+        answeredTargetItemIds: nextState.targetAnsweredItemIds
+      });
       setFeedback("");
       return;
     }
@@ -278,11 +290,7 @@ export default function RoomTourPage({ identity, onComplete }) {
     if (isRecordableExplanation && decision.summary) {
       setShowFreeTourCompletionHint(true);
       setRecordedItems((currentItems) =>
-        upsertRecordedItem(currentItems, {
-          id: decision.matchedItemId || `unmatched_${Date.now()}`,
-          summary: decision.summary,
-          matched: Boolean(decision.matchedItemId)
-        })
+        upsertRecordedItemsFromDecision(currentItems, decision, "unmatched")
       );
     }
 
@@ -293,11 +301,16 @@ export default function RoomTourPage({ identity, onComplete }) {
     setFeedback(decision.feedback || "");
   }
 
-  async function completeRoomTourSession() {
+  async function completeRoomTourSession(overrides = {}) {
     if (completionSubmittedRef.current) {
       setFinalCompleted(true);
       return;
     }
+
+    const finalRecordedItems = overrides.recordedItems || recordedItems;
+    const finalCoveredItemIds = overrides.coveredItemIds || coveredItemIds;
+    const finalTargetAnsweredItemIds =
+      overrides.targetAnsweredItemIds || targetAnsweredItemIds;
 
     try {
       await submitRoomTourCompletion({
@@ -305,16 +318,16 @@ export default function RoomTourPage({ identity, onComplete }) {
         participantCode: identity?.participantCode,
         sessionId: identity?.sessionId,
         submittedAtBrowser: new Date().toISOString(),
-        recordedItems,
-        coveredItemIds,
-        targetAnsweredItemIds,
-        targetItemsStatus: getRoomTourItemsStatus(coveredItemIds),
+        recordedItems: finalRecordedItems,
+        coveredItemIds: finalCoveredItemIds,
+        targetAnsweredItemIds: finalTargetAnsweredItemIds,
+        targetItemsStatus: getRoomTourItemsStatus(finalCoveredItemIds),
         roomTourCondition,
         metadata: {
           roomTourPhase,
           roomTourCondition,
           finalPromptCompleted: true,
-          targetQuestionItemsStatus: getTargetQuestionItemsStatus(targetAnsweredItemIds)
+          targetQuestionItemsStatus: getTargetQuestionItemsStatus(finalTargetAnsweredItemIds)
         }
       });
 
@@ -367,6 +380,15 @@ export default function RoomTourPage({ identity, onComplete }) {
 
   async function handlePreferenceFollowupDecision(decision) {
     if (decision.isComplete || decision.intent === "complete_room_tour_introduction") {
+      const nextState = getRoomTourDecisionState({
+        recordedItems,
+        coveredItemIds,
+        targetAnsweredItemIds
+      }, decision, "preference");
+      setRecordedItems(nextState.recordedItems);
+      setCoveredItemIds(nextState.coveredItemIds);
+      setTargetAnsweredItemIds(nextState.targetAnsweredItemIds);
+
       if (
         isRobotLeadCondition(roomTourCondition) &&
         roomTourPhase === "post_questions"
@@ -383,7 +405,7 @@ export default function RoomTourPage({ identity, onComplete }) {
       }
 
       setFeedback("");
-      await completeRoomTourSession();
+      await completeRoomTourSession(nextState);
       return;
     }
 
@@ -392,11 +414,7 @@ export default function RoomTourPage({ identity, onComplete }) {
 
       if (decision.summary) {
         setRecordedItems((currentItems) =>
-          upsertRecordedItem(currentItems, {
-            id: decision.matchedItemId || `preference_${Date.now()}`,
-            summary: decision.summary,
-            matched: Boolean(decision.matchedItemId)
-          })
+          upsertRecordedItemsFromDecision(currentItems, decision, "preference")
         );
       }
 
@@ -772,6 +790,12 @@ function upsertRecordedItem(items, nextItem) {
   );
 
   if (duplicateSummaryIndex >= 0) {
+    const duplicateItem = items[duplicateSummaryIndex];
+
+    if (nextItem.matched && duplicateItem.matched) {
+      return [...items, nextItem];
+    }
+
     return items.map((item, index) => {
       if (index !== duplicateSummaryIndex) {
         return item;
@@ -786,6 +810,62 @@ function upsertRecordedItem(items, nextItem) {
   }
 
   return [...items, nextItem];
+}
+
+function upsertRecordedItemsFromDecision(items, decision, fallbackPrefix) {
+  const matchedItemIds = getDecisionMatchedItemIds(decision);
+  const nextItems = matchedItemIds.length
+    ? matchedItemIds.map((itemId) => ({
+        id: itemId,
+        summary: decision.summary,
+        matched: true
+      }))
+    : [{
+        id: `${fallbackPrefix}_${Date.now()}`,
+        summary: decision.summary,
+        matched: false
+      }];
+
+  return nextItems.reduce(
+    (currentItems, nextItem) => upsertRecordedItem(currentItems, nextItem),
+    items
+  );
+}
+
+function getRoomTourDecisionState(currentState, decision, fallbackPrefix) {
+  const matchedItemIds = getDecisionMatchedItemIds(decision);
+  const shouldRecordDecision = Boolean(decision.summary && matchedItemIds.length);
+  const recordedItems = shouldRecordDecision
+    ? upsertRecordedItemsFromDecision(
+        currentState.recordedItems,
+        decision,
+        fallbackPrefix
+      )
+    : currentState.recordedItems;
+  const coveredItemIds = Array.isArray(decision.coveredItemIds)
+    ? normalizeIdList(decision.coveredItemIds)
+    : currentState.coveredItemIds;
+  const targetAnsweredItemIds = Array.isArray(decision.answeredTargetItemIds)
+    ? normalizeIdList(decision.answeredTargetItemIds)
+    : currentState.targetAnsweredItemIds;
+
+  return {
+    recordedItems,
+    coveredItemIds,
+    targetAnsweredItemIds
+  };
+}
+
+function getDecisionMatchedItemIds(decision) {
+  if (Array.isArray(decision.matchedItemIds)) {
+    const matchedItemIds = normalizeIdList(decision.matchedItemIds);
+
+    return matchedItemIds.length
+      ? matchedItemIds
+      : normalizeIdList([decision.matchedItemId]);
+  }
+
+  return normalizeIdList([decision.matchedItemId]);
 }
 
 function areRecordedSummariesSimilar(firstSummary, secondSummary) {

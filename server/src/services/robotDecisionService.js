@@ -155,16 +155,17 @@ async function decideRoomTourExplanation({ transcript, context, flowStep }) {
   const classification = parseRoomTourClassification(rawAnswer);
   const sessionKey = getRoomTourSessionKey(context);
   const progress = getRoomTourProgress(sessionKey);
-  const matchedItem = ROOM_TOUR_ITEMS.find(
-    (item) => item.id === classification.matchedItemId
-  );
-  const isRecordableRoomDetail = Boolean(matchedItem) || classification.isRoomDetail;
+  const matchedItems = classification.matchedItemIds
+    .map((matchedItemId) => ROOM_TOUR_ITEMS.find((item) => item.id === matchedItemId))
+    .filter(Boolean);
+  const matchedItem = matchedItems[0] || null;
+  const isRecordableRoomDetail = matchedItems.length > 0 || classification.isRoomDetail;
 
-  if (matchedItem) {
-    progress.coveredItemIds.add(matchedItem.id);
+  for (const matchedRoomItem of matchedItems) {
+    progress.coveredItemIds.add(matchedRoomItem.id);
 
-    if (ROOM_TOUR_TARGET_ITEM_IDS.has(matchedItem.id)) {
-      progress.targetAnsweredItemIds.add(matchedItem.id);
+    if (ROOM_TOUR_TARGET_ITEM_IDS.has(matchedRoomItem.id)) {
+      progress.targetAnsweredItemIds.add(matchedRoomItem.id);
     }
   }
 
@@ -178,7 +179,7 @@ async function decideRoomTourExplanation({ transcript, context, flowStep }) {
     approved: isRecordableRoomDetail || classification.isComplete,
     intent: classification.isComplete
       ? "complete_room_tour_introduction"
-      : matchedItem
+      : matchedItems.length
         ? "record_room_tour_item"
         : classification.isRoomDetail
           ? "record_room_tour_detail"
@@ -188,6 +189,7 @@ async function decideRoomTourExplanation({ transcript, context, flowStep }) {
     isRoomDetail: classification.isRoomDetail,
     matchedItemId: matchedItem?.id || null,
     matchedItemLabel: matchedItem?.label || "",
+    matchedItemIds: matchedItems.map((item) => item.id),
     confidence: classification.confidence,
     coveredItemIds,
     missingItemIds,
@@ -264,15 +266,18 @@ async function decideRoomTourPreferenceFollowup({ transcript, context, flowStep 
   const classification = parseRoomTourPreferenceFollowupClassification(rawAnswer);
   const sessionKey = getRoomTourSessionKey(context);
   const progress = getRoomTourProgress(sessionKey);
-  const matchedItem = ROOM_TOUR_ITEMS.find(
-    (item) => item.id === classification.matchedItemId
-  );
+  const matchedItems = classification.matchedItemIds
+    .map((matchedItemId) => ROOM_TOUR_ITEMS.find((item) => item.id === matchedItemId))
+    .filter(Boolean);
+  const matchedItem = matchedItems[0] || null;
 
-  if (classification.isRelevant && matchedItem) {
-    progress.coveredItemIds.add(matchedItem.id);
+  if (classification.isRelevant && matchedItems.length) {
+    for (const matchedRoomItem of matchedItems) {
+      progress.coveredItemIds.add(matchedRoomItem.id);
 
-    if (ROOM_TOUR_TARGET_ITEM_IDS.has(matchedItem.id)) {
-      progress.targetAnsweredItemIds.add(matchedItem.id);
+      if (ROOM_TOUR_TARGET_ITEM_IDS.has(matchedRoomItem.id)) {
+        progress.targetAnsweredItemIds.add(matchedRoomItem.id);
+      }
     }
   }
 
@@ -288,6 +293,7 @@ async function decideRoomTourPreferenceFollowup({ transcript, context, flowStep 
     summary: classification.summary,
     matchedItemId: matchedItem?.id || null,
     matchedItemLabel: matchedItem?.label || "",
+    matchedItemIds: matchedItems.map((item) => item.id),
     coveredItemIds: Array.from(progress.coveredItemIds).sort((a, b) => a - b),
     answeredTargetItemIds: Array.from(progress.targetAnsweredItemIds).sort((a, b) => a - b),
     confidence: classification.confidence,
@@ -467,12 +473,18 @@ function parseRoomTourClassification(answer) {
   try {
     const parsed = JSON.parse(extractJson(answer));
     const confidence = Number(parsed.confidence);
+    const isComplete = parsed.isComplete === true;
+    const matchedItemIds = normalizeRoomTourItemIdsWithFallback(
+      parsed.matchedItemIds,
+      parsed.matchedItemId
+    );
 
     return {
       summary: cleanSummary(parsed.summary),
-      isComplete: parsed.isComplete === true,
-      isRoomDetail: parsed.isRoomDetail === true,
-      matchedItemId: normalizeRoomTourItemId(parsed.matchedItemId),
+      isComplete,
+      isRoomDetail: parsed.isRoomDetail === true || matchedItemIds.length > 0,
+      matchedItemId: matchedItemIds[0] || null,
+      matchedItemIds,
       confidence: Number.isFinite(confidence) ? confidence : 0
     };
   } catch {
@@ -481,6 +493,7 @@ function parseRoomTourClassification(answer) {
       isComplete: false,
       isRoomDetail: true,
       matchedItemId: null,
+      matchedItemIds: [],
       confidence: 0
     };
   }
@@ -509,12 +522,18 @@ function parseRoomTourPreferenceFollowupClassification(answer) {
   try {
     const parsed = JSON.parse(extractJson(answer));
     const confidence = Number(parsed.confidence);
+    const isComplete = parsed.isComplete === true;
+    const matchedItemIds = normalizeRoomTourItemIdsWithFallback(
+      parsed.matchedItemIds,
+      parsed.matchedItemId
+    );
 
     return {
       summary: cleanSummary(parsed.summary),
-      isRelevant: parsed.isRelevant === true,
-      isComplete: parsed.isComplete === true,
-      matchedItemId: normalizeRoomTourItemId(parsed.matchedItemId),
+      isRelevant: parsed.isRelevant === true || matchedItemIds.length > 0,
+      isComplete,
+      matchedItemId: matchedItemIds[0] || null,
+      matchedItemIds,
       confidence: Number.isFinite(confidence) ? confidence : 0
     };
   } catch {
@@ -523,9 +542,33 @@ function parseRoomTourPreferenceFollowupClassification(answer) {
       isRelevant: false,
       isComplete: false,
       matchedItemId: null,
+      matchedItemIds: [],
       confidence: 0
     };
   }
+}
+
+function normalizeRoomTourItemIds(value) {
+  const values = Array.isArray(value) ? value : [value];
+  const normalizedIds = [];
+
+  for (const valueItem of values) {
+    const itemId = normalizeRoomTourItemId(valueItem);
+
+    if (itemId !== null && !normalizedIds.includes(itemId)) {
+      normalizedIds.push(itemId);
+    }
+  }
+
+  return normalizedIds;
+}
+
+function normalizeRoomTourItemIdsWithFallback(value, fallbackValue) {
+  const normalizedIds = normalizeRoomTourItemIds(value);
+
+  return normalizedIds.length
+    ? normalizedIds
+    : normalizeRoomTourItemIds(fallbackValue);
 }
 
 function normalizeRoomTourItemId(value) {
