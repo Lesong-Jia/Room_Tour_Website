@@ -150,9 +150,11 @@ export default function TaskPhasePage({
   const [lastOutcome, setLastOutcome] = useState(null);
   const [ratings, setRatings] = useState(INITIAL_RATINGS);
   const [ratingError, setRatingError] = useState("");
+  const [questionnaireSubmitting, setQuestionnaireSubmitting] = useState(false);
   const [clarifiedTasks, setClarifiedTasks] = useState({});
   const [completed, setCompleted] = useState(false);
   const completedTasksRef = useRef([]);
+  const submittedTaskQuestionnaireKeysRef = useRef(new Set());
   const taskResponseCondition = identity?.taskResponseCondition || "";
 
   const unityConfig = useMemo(
@@ -198,6 +200,7 @@ export default function TaskPhasePage({
         setTaskPhase("instruction");
         setFeedback("");
         setRatingError("");
+        setQuestionnaireSubmitting(false);
         setRatings(INITIAL_RATINGS);
       }
 
@@ -232,6 +235,7 @@ export default function TaskPhasePage({
         setCurrentTask(task);
         setTaskPhase("questionnaire");
         setFeedback("");
+        setQuestionnaireSubmitting(false);
         setLastOutcome((currentOutcome) =>
           currentOutcome?.taskId === task.taskId
             ? currentOutcome
@@ -393,10 +397,26 @@ export default function TaskPhasePage({
   async function submitTaskQuestionnaire(event) {
     event.preventDefault();
 
+    const submissionKey = getTaskQuestionnaireSubmissionKey({
+      sessionId: identity?.sessionId,
+      phase,
+      task: currentTask
+    });
+
+    if (
+      questionnaireSubmitting ||
+      submittedTaskQuestionnaireKeysRef.current.has(submissionKey)
+    ) {
+      return;
+    }
+
     if (LIKERT_ITEMS.some((item) => !ratings[item.id])) {
       setRatingError("Please answer both ratings before continuing.");
       return;
     }
+
+    setQuestionnaireSubmitting(true);
+    submittedTaskQuestionnaireKeysRef.current.add(submissionKey);
 
     try {
       const completedAtBrowser = new Date().toISOString();
@@ -448,6 +468,8 @@ export default function TaskPhasePage({
         TASK_PHASE_UNITY_COMMAND_TARGET
       );
     } catch (error) {
+      submittedTaskQuestionnaireKeysRef.current.delete(submissionKey);
+      setQuestionnaireSubmitting(false);
       setRatingError(
         error.message || "This task result could not be saved. Please try again."
       );
@@ -474,6 +496,7 @@ export default function TaskPhasePage({
     lastOutcome,
     ratings,
     ratingError,
+    questionnaireSubmitting,
     setRatings,
     submitTaskQuestionnaire,
     useSafariQuestionnaireLayout: isSafariBrowser()
@@ -550,6 +573,7 @@ function getTaskOverlay({
   lastOutcome,
   ratings,
   ratingError,
+  questionnaireSubmitting,
   setRatings,
   submitTaskQuestionnaire,
   useSafariQuestionnaireLayout
@@ -608,8 +632,12 @@ function getTaskOverlay({
           ))}
         </div>
         {ratingError ? <p className="error-message">{ratingError}</p> : null}
-        <button className="primary-action task-phase-continue-button" type="submit">
-          Continue
+        <button
+          className="primary-action task-phase-continue-button"
+          disabled={questionnaireSubmitting}
+          type="submit"
+        >
+          {questionnaireSubmitting ? "Saving..." : "Continue"}
         </button>
       </form>
     );
@@ -712,6 +740,15 @@ function getTaskCountLabel(task) {
   }
 
   return `Task ${task.taskIndex} of ${task.taskCount}`;
+}
+
+function getTaskQuestionnaireSubmissionKey({ sessionId, phase, task }) {
+  return [
+    sessionId || "unknown_session",
+    phase || "unknown_phase",
+    task?.taskIndex || "unknown_index",
+    task?.taskId || "unknown_task"
+  ].join(":");
 }
 
 function getResultText(task, outcome) {
